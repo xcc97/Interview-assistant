@@ -24,27 +24,45 @@
 1. 安装 Java 8+ 与 Maven 3.9+
 2. 配置 API Key（推荐环境变量）
 
+Windows PowerShell：
+
 ```powershell
 $env:BAILIAN_API_KEY="你的阿里云百炼APIKey"
 ```
 
-或在 `src/main/resources/application.properties` 中填写 `bailian.apiKey`。
+macOS / zsh：
+
+```bash
+export BAILIAN_API_KEY="你的阿里云百炼APIKey"
+```
+
+也可以在 `src/main/resources/application.properties` 中填写 `bailian.apiKey`。
 
 3. 下载 VOSK 中文模型（示例：`vosk-model-small-cn-0.22`），解压到本机目录，例如：
 
-`D:\models\vosk-model-small-cn-0.22`
+Windows：`D:\models\vosk-model-small-cn-0.22`
+
+macOS：`/Users/yourname/models/vosk-model-small-cn-0.22`
 
 4. 配置模型路径（二选一）
+
+Windows PowerShell：
 
 ```powershell
 $env:VOSK_MODEL_PATH="D:\models\vosk-model-small-cn-0.22"
 ```
 
-或在 `src/main/resources/application.properties` 填 `asr.voskModelPath`。
+macOS / zsh：
+
+```bash
+export VOSK_MODEL_PATH="/Users/yourname/models/vosk-model-small-cn-0.22"
+```
+
+也可以在 `src/main/resources/application.properties` 填 `asr.voskModelPath`。
 
 5. 运行
 
-```powershell
+```bash
 mvn compile exec:java
 ```
 

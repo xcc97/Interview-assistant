@@ -1,0 +1,10 @@
+^D:\面试助手项目\NATIVE\WINDOWS\WASAPI-LOOPBACK-CAPTURE\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SD:/面试助手项目/native/windows/wasapi-loopback-capture -BD:/面试助手项目/native/windows/wasapi-loopback-capture/build --check-stamp-file D:/面试助手项目/native/windows/wasapi-loopback-capture/build/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

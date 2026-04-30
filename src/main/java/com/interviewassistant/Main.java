@@ -23,16 +23,9 @@ public class Main {
         // Avoid loading stale libvosk from system directories.
         System.setProperty("jna.nosys", "true");
 
-        String osName = System.getProperty("os.name", "").toLowerCase();
-        String resourcePath;
-        String fileName;
-        if (osName.contains("mac")) {
-            resourcePath = "/darwin/libvosk.dylib";
-            fileName = "libvosk.dylib";
-        } else if (osName.contains("linux")) {
-            resourcePath = "/linux-x86-64/libvosk.so";
-            fileName = "libvosk.so";
-        } else {
+        String resourcePath = resolveVoskNativeResourcePath();
+        String fileName = resolveNativeFileName(resourcePath);
+        if (resourcePath == null || fileName == null) {
             return;
         }
 
@@ -51,5 +44,37 @@ public class Main {
         } catch (IOException ignored) {
             // Fall back to default JNA loading behavior.
         }
+    }
+
+    private static String resolveVoskNativeResourcePath() {
+        String osName = System.getProperty("os.name", "").toLowerCase();
+        String arch = System.getProperty("os.arch", "").toLowerCase();
+
+        if (osName.contains("win")) {
+            return arch.contains("64") ? "/windows-x86-64/vosk.dll" : "/windows-x86/vosk.dll";
+        }
+        if (osName.contains("mac") || osName.contains("darwin")) {
+            return arch.contains("aarch64") || arch.contains("arm64") ? "/darwin-aarch64/libvosk.dylib" : "/darwin/libvosk.dylib";
+        }
+        if (osName.contains("linux")) {
+            return arch.contains("aarch64") || arch.contains("arm64") ? "/linux-aarch64/libvosk.so" : "/linux-x86-64/libvosk.so";
+        }
+        return null;
+    }
+
+    private static String resolveNativeFileName(String resourcePath) {
+        if (resourcePath == null) {
+            return null;
+        }
+        if (resourcePath.endsWith(".dll")) {
+            return "vosk.dll";
+        }
+        if (resourcePath.endsWith(".dylib")) {
+            return "libvosk.dylib";
+        }
+        if (resourcePath.endsWith(".so")) {
+            return "libvosk.so";
+        }
+        return null;
     }
 }
