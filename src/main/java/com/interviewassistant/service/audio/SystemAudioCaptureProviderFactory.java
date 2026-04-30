@@ -5,12 +5,12 @@ import java.net.URISyntaxException;
 import java.net.URL;
 
 public class SystemAudioCaptureProviderFactory {
-    public static PcmAudioCaptureProvider create(String mixerName) {
+    public static PcmAudioCaptureProvider create() {
         File helper = resolveNativeHelper();
-        if (helper != null && helper.exists()) {
-            return new ExternalPcmProcessCaptureProvider(helper, buildHelperDisplayName(helper));
+        if (helper == null || !helper.exists()) {
+            throw new IllegalStateException("未检测到内置系统音频采集组件: " + (helper == null ? "<unknown>" : helper.getAbsolutePath()));
         }
-        return new JavaSoundLoopbackCaptureProvider(mixerName);
+        return new ExternalPcmProcessCaptureProvider(helper, buildHelperDisplayName(helper));
     }
 
     public static boolean hasNativeHelper() {

@@ -8,7 +8,6 @@ import com.interviewassistant.service.SpeechListenerService;
 import com.interviewassistant.service.audio.SystemAudioCaptureProviderFactory;
 
 import javax.swing.BorderFactory;
-import javax.swing.JComboBox;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -18,288 +17,189 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
-import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.WindowConstants;
+import javax.swing.border.EmptyBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.DataLine;
-import javax.sound.sampled.Line;
-import javax.sound.sampled.Mixer;
-import javax.sound.sampled.TargetDataLine;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridLayout;
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainFrame extends JFrame {
-    private static final String NATIVE_SYSTEM_AUDIO_OPTION = "内置系统音频采集（推荐，无需 VB-CABLE）";
-
-    private final JTextField modelField = new JTextField(20);
     private final JTextArea transcriptArea = new JTextArea();
-    private final JTextArea resumeArea = new JTextArea();
-    private final JTextArea partialSpeechArea = new JTextArea();
-    private final JComboBox<String> mixerCombo = new JComboBox<>();
-    private final JTextArea intentArea = new JTextArea();
     private final JTextArea pointsArea = new JTextArea();
     private final JTextArea answerArea = new JTextArea();
-    private final JLabel statusLabel = new JLabel("状态: 就绪");
+    private final JLabel statusLabel = new JLabel("就绪");
+    private final JLabel resumeStatusLabel = new JLabel("未导入简历");
+    private final JLabel audioStatusLabel = new JLabel("系统音频采集组件检测中...");
 
     private final AppConfig config = new AppConfig();
     private final PdfResumeParser pdfResumeParser = new PdfResumeParser();
     private final BailianDeepSeekClient deepSeekClient = new BailianDeepSeekClient(config);
     private final SpeechListenerService speechListenerService = new SpeechListenerService(config);
     private final ExecutorService analyzeExecutor = Executors.newSingleThreadExecutor();
+
+    private String resumeText = "";
     private JButton listenButton;
-    private JButton refreshMixerButton;
 
     public MainFrame() {
-        super("远程面试助手 (Java + 阿里云百炼 DeepSeek)");
+        super("远程面试助手");
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        setSize(new Dimension(1080, 760));
+        setSize(new Dimension(1180, 760));
+        setMinimumSize(new Dimension(980, 660));
         setLocationRelativeTo(null);
         initUi();
     }
 
     private void initUi() {
-        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton importResumeButton = new JButton("导入简历 PDF");
-        JButton analyzeButton = new JButton("分析并生成回答");
-        JButton clearButton = new JButton("清空输出");
-        JButton audioHelpButton = new JButton("音频设置帮助");
-        listenButton = new JButton("开始监听");
-        refreshMixerButton = new JButton("刷新输入源");
+        JPanel root = new JPanel(new BorderLayout(14, 14));
+        root.setBorder(new EmptyBorder(16, 18, 12, 18));
+        root.setBackground(new Color(245, 247, 251));
+        setContentPane(root);
 
-        modelField.setText(config.getModel());
-        modelField.setEditable(false);
-
-        topPanel.add(importResumeButton);
-        topPanel.add(new JLabel("监听输入源:"));
-        topPanel.setPreferredSize(new Dimension(1080, 30));
-        mixerCombo.setPreferredSize(new Dimension(340, 25));
-        topPanel.add(mixerCombo);
-        topPanel.add(refreshMixerButton);
-        topPanel.add(listenButton);
-        topPanel.add(new JLabel("当前模型:"));
-        topPanel.add(modelField);
-        topPanel.add(analyzeButton);
-        topPanel.add(clearButton);
-        topPanel.add(audioHelpButton);
+        JPanel header = new JPanel(new BorderLayout(12, 8));
+        header.setOpaque(false);
+        JLabel title = new JLabel("远程面试助手");
+        title.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 24));
+        JLabel subtitle = new JLabel("自动监听电脑会议声音，生成回答要点与参考回答");
+        subtitle.setForeground(new Color(90, 99, 115));
+        subtitle.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 13));
+        JPanel titlePanel = new JPanel(new GridLayout(2, 1));
+        titlePanel.setOpaque(false);
+        titlePanel.add(title);
+        titlePanel.add(subtitle);
+        header.add(titlePanel, BorderLayout.WEST);
+        header.add(buildToolbar(), BorderLayout.EAST);
+        root.add(header, BorderLayout.NORTH);
 
         transcriptArea.setLineWrap(true);
         transcriptArea.setWrapStyleWord(true);
-        transcriptArea.setBorder(BorderFactory.createTitledBorder("面试官问题（自动转写结果/可手动输入）"));
-
-        resumeArea.setLineWrap(true);
-        resumeArea.setWrapStyleWord(true);
-        resumeArea.setEditable(false);
-        resumeArea.setBorder(BorderFactory.createTitledBorder("简历解析结果"));
-
-        partialSpeechArea.setEditable(false);
-        partialSpeechArea.setLineWrap(true);
-        partialSpeechArea.setWrapStyleWord(true);
-        partialSpeechArea.setBorder(BorderFactory.createTitledBorder("实时识别中（未结束）"));
-
-        JSplitPane upperSplit = new JSplitPane(
-                JSplitPane.HORIZONTAL_SPLIT,
-                new JScrollPane(transcriptArea),
-                new JScrollPane(resumeArea)
-        );
-        upperSplit.setResizeWeight(0.5);
-
-        JSplitPane speechSplit = new JSplitPane(
-                JSplitPane.HORIZONTAL_SPLIT,
-                upperSplit,
-                new JScrollPane(partialSpeechArea)
-        );
-        speechSplit.setResizeWeight(0.7);
-
-        intentArea.setEditable(false);
-        intentArea.setLineWrap(true);
-        intentArea.setWrapStyleWord(true);
-        intentArea.setBorder(BorderFactory.createTitledBorder("提问意图"));
+        transcriptArea.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 15));
+        transcriptArea.setBorder(new EmptyBorder(10, 10, 10, 10));
 
         pointsArea.setEditable(false);
         pointsArea.setLineWrap(true);
         pointsArea.setWrapStyleWord(true);
-        pointsArea.setBorder(BorderFactory.createTitledBorder("回答要点"));
+        pointsArea.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 15));
+        pointsArea.setBorder(new EmptyBorder(10, 10, 10, 10));
 
         answerArea.setEditable(false);
         answerArea.setLineWrap(true);
         answerArea.setWrapStyleWord(true);
-        answerArea.setBorder(BorderFactory.createTitledBorder("参考回答"));
+        answerArea.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 15));
+        answerArea.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        JSplitPane lowerTopSplit = new JSplitPane(
-                JSplitPane.HORIZONTAL_SPLIT,
-                new JScrollPane(intentArea),
-                new JScrollPane(pointsArea)
-        );
-        lowerTopSplit.setResizeWeight(0.4);
-
-        JSplitPane lowerSplit = new JSplitPane(
+        JSplitPane leftSplit = new JSplitPane(
                 JSplitPane.VERTICAL_SPLIT,
-                lowerTopSplit,
-                new JScrollPane(answerArea)
+                createCard("面试官问题", new JScrollPane(transcriptArea)),
+                createCard("回答要点", new JScrollPane(pointsArea))
         );
-        lowerSplit.setResizeWeight(0.42);
+        leftSplit.setResizeWeight(0.55);
+        leftSplit.setBorder(null);
+        leftSplit.setDividerSize(8);
 
         JSplitPane mainSplit = new JSplitPane(
-                JSplitPane.VERTICAL_SPLIT,
-                speechSplit,
-                lowerSplit
+                JSplitPane.HORIZONTAL_SPLIT,
+                leftSplit,
+                createCard("参考回答", new JScrollPane(answerArea))
         );
-        mainSplit.setResizeWeight(0.45);
+        mainSplit.setResizeWeight(0.42);
+        mainSplit.setBorder(null);
+        mainSplit.setDividerSize(8);
+        root.add(mainSplit, BorderLayout.CENTER);
 
-        add(topPanel, BorderLayout.NORTH);
-        add(mainSplit, BorderLayout.CENTER);
-        add(statusLabel, BorderLayout.SOUTH);
+        JPanel footer = new JPanel(new BorderLayout(12, 0));
+        footer.setOpaque(false);
+        statusLabel.setForeground(new Color(55, 65, 81));
+        footer.add(statusLabel, BorderLayout.WEST);
+        footer.add(audioStatusLabel, BorderLayout.EAST);
+        root.add(footer, BorderLayout.SOUTH);
+
+        refreshSystemAudioStatus();
+    }
+
+    private JPanel buildToolbar() {
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        toolbar.setOpaque(false);
+
+        JButton importResumeButton = createButton("导入简历", new Color(238, 242, 255), new Color(67, 56, 202));
+        JButton analyzeButton = createButton("生成回答", new Color(37, 99, 235), Color.WHITE);
+        JButton clearButton = createButton("清空", new Color(243, 244, 246), new Color(55, 65, 81));
+        JButton audioHelpButton = createButton("音频说明", new Color(243, 244, 246), new Color(55, 65, 81));
+        listenButton = createButton("开始监听", new Color(22, 163, 74), Color.WHITE);
+
+        resumeStatusLabel.setForeground(new Color(107, 114, 128));
+        resumeStatusLabel.setBorder(new EmptyBorder(0, 0, 0, 8));
+
+        toolbar.add(resumeStatusLabel);
+        toolbar.add(importResumeButton);
+        toolbar.add(listenButton);
+        toolbar.add(analyzeButton);
+        toolbar.add(clearButton);
+        toolbar.add(audioHelpButton);
 
         importResumeButton.addActionListener(e -> onImportResume());
         analyzeButton.addActionListener(e -> onAnalyze());
         clearButton.addActionListener(e -> clearResult());
         listenButton.addActionListener(e -> toggleListening());
-        refreshMixerButton.addActionListener(e -> refreshMixers());
         audioHelpButton.addActionListener(e -> showAudioSetupHelp());
-
-        refreshMixers();
+        return toolbar;
     }
 
-    private void refreshMixers() {
-        mixerCombo.removeAllItems();
-        try {
-            boolean nativeHelperAvailable = SystemAudioCaptureProviderFactory.hasNativeHelper();
-            if (nativeHelperAvailable) {
-                mixerCombo.addItem(NATIVE_SYSTEM_AUDIO_OPTION);
-            }
+    private JButton createButton(String text, Color background, Color foreground) {
+        JButton button = new JButton(text);
+        button.setFocusPainted(false);
+        button.setBackground(background);
+        button.setForeground(foreground);
+        button.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 13));
+        button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(229, 231, 235)),
+                new EmptyBorder(7, 13, 7, 13)
+        ));
+        return button;
+    }
 
-            Mixer.Info[] infos = AudioSystem.getMixerInfo();
-            java.util.ArrayList<String> loopbackInputs = new java.util.ArrayList<String>();
-            java.util.ArrayList<String> otherInputs = new java.util.ArrayList<String>();
-            for (int i = 0; i < infos.length; i++) {
-                Mixer.Info info = infos[i];
-                if (info == null) {
-                    continue;
-                }
-                Mixer mixer = AudioSystem.getMixer(info);
-                if (!isInputCapable(mixer)) {
-                    continue;
-                }
-                String name = info.getName();
-                if (name == null || name.trim().isEmpty()) {
-                    continue;
-                }
-                String displayName = buildMixerDisplayName(info);
-                if (isVirtualCableInput(info)) {
-                    loopbackInputs.add(0, displayName);
-                } else if (isSystemAudioInput(info)) {
-                    loopbackInputs.add(displayName);
-                } else {
-                    otherInputs.add(displayName + "（麦克风/普通输入，不建议）");
-                }
-            }
-            for (int i = 0; i < loopbackInputs.size(); i++) {
-                mixerCombo.addItem(loopbackInputs.get(i));
-            }
-            for (int i = 0; i < otherInputs.size(); i++) {
-                mixerCombo.addItem(otherInputs.get(i));
-            }
+    private JPanel createCard(String title, JScrollPane content) {
+        JPanel card = new JPanel(new BorderLayout(0, 8));
+        card.setBackground(Color.WHITE);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(226, 232, 240)),
+                new EmptyBorder(12, 12, 12, 12)
+        ));
+        JLabel label = new JLabel(title);
+        label.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 15));
+        label.setForeground(new Color(17, 24, 39));
+        content.setBorder(BorderFactory.createLineBorder(new Color(241, 245, 249)));
+        card.add(label, BorderLayout.NORTH);
+        card.add(content, BorderLayout.CENTER);
+        return card;
+    }
 
-            String preferred = config.getAsrMixerName();
-            if (nativeHelperAvailable) {
-                mixerCombo.setSelectedIndex(0);
-                statusLabel.setText("状态: 已启用内置系统音频采集，可直接监听电脑会议声音");
-            } else if (preferred != null && !preferred.trim().isEmpty()) {
-                for (int i = 0; i < mixerCombo.getItemCount(); i++) {
-                    String item = stripUiSuffix(mixerCombo.getItemAt(i));
-                    if (preferred.equalsIgnoreCase(item)) {
-                        mixerCombo.setSelectedIndex(i);
-                        break;
-                    }
-                }
-            } else if (loopbackInputs.size() > 0) {
-                mixerCombo.setSelectedIndex(0);
-            } else if (mixerCombo.getItemCount() > 0) {
-                mixerCombo.setSelectedIndex(0);
-                statusLabel.setText("状态: 未发现系统声音/回环输入源，请启用立体声混音、VB-CABLE、BlackHole 或 Loopback");
-            }
-
-            if (mixerCombo.getItemCount() == 0) {
-                statusLabel.setText("状态: 未发现可用输入源，请检查系统录音设备");
-            }
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "刷新音频输入源失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+    private void refreshSystemAudioStatus() {
+        if (SystemAudioCaptureProviderFactory.hasNativeHelper()) {
+            audioStatusLabel.setText("音频: 内置系统采集已就绪");
+            audioStatusLabel.setForeground(new Color(22, 101, 52));
+        } else {
+            audioStatusLabel.setText("音频: 未检测到内置采集组件");
+            audioStatusLabel.setForeground(new Color(185, 28, 28));
         }
-    }
-
-    private boolean isInputCapable(Mixer mixer) {
-        if (mixer == null) {
-            return false;
-        }
-        Line.Info[] lineInfos = mixer.getTargetLineInfo();
-        if (lineInfos == null || lineInfos.length == 0) {
-            return false;
-        }
-        for (int i = 0; i < lineInfos.length; i++) {
-            if (!(lineInfos[i] instanceof DataLine.Info)) {
-                continue;
-            }
-            DataLine.Info info = (DataLine.Info) lineInfos[i];
-            if (TargetDataLine.class.isAssignableFrom(info.getLineClass())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isSystemAudioInput(Mixer.Info info) {
-        String text = getMixerSearchText(info);
-        return isVirtualCableText(text)
-                || text.contains("stereo mix")
-                || text.contains("立体声混音")
-                || text.contains("立體聲混音")
-                || text.contains("loopback")
-                || text.contains("blackhole")
-                || text.contains("soundflower")
-                || text.contains("what u hear")
-                || text.contains("what you hear")
-                || text.contains("wave out mix")
-                || text.contains("monitor of")
-                || text.contains("wasapi");
-    }
-
-    private boolean isVirtualCableInput(Mixer.Info info) {
-        return isVirtualCableText(getMixerSearchText(info));
-    }
-
-    private boolean isVirtualCableText(String text) {
-        return text.contains("vb-audio")
-                || text.contains("vb audio")
-                || text.contains("cable output")
-                || text.contains("cable-output")
-                || text.contains("cable out")
-                || text.contains("virtual cable")
-                || text.contains("virtual-audio");
-    }
-
-    private String getMixerSearchText(Mixer.Info info) {
-        return ((info.getName() == null ? "" : info.getName()) + " "
-                + (info.getDescription() == null ? "" : info.getDescription())).toLowerCase();
     }
 
     private void showAudioSetupHelp() {
-        String message = "商用上线目标：用户不安装 VB-CABLE、BlackHole、Loopback 等第三方工具，只安装你的客户端。\n\n"
-                + "实现方式：客户端随包内置系统音频采集组件。\n"
-                + "Windows: native/windows/wasapi-loopback-capture.exe，使用 WASAPI Loopback 捕获默认播放设备声音。\n"
-                + "macOS: native/macos/system-audio-capture，使用 ScreenCaptureKit 捕获系统声音。\n\n"
-                + "如果界面里出现“内置系统音频采集（推荐，无需 VB-CABLE）”，说明 helper 已打包，可直接使用。\n"
-                + "如果没有出现，说明当前开发环境还没有 helper 二进制文件，程序只能回退到 JavaSound，所以你才会看到 Stereo Mix/VB-CABLE 这类旧选项。\n\n"
-                + "注意：我已经完成 Java 端接入架构，但还需要继续实现并打包 native helper 二进制文件，才能真正做到用户无需安装第三方音频工具。";
-        JOptionPane.showMessageDialog(this, message, "音频设置帮助", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(this,
+                "本版本只保留主方案：内置系统音频采集。\n\n"
+                        + "Windows: native/windows/wasapi-loopback-capture.exe\n"
+                        + "macOS: native/macos/system-audio-capture\n\n"
+                        + "如果底部显示未检测到内置采集组件，请重新打包客户端或检查 native helper 是否存在。",
+                "音频说明",
+                JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void onImportResume() {
@@ -311,7 +211,7 @@ public class MainFrame extends JFrame {
             return;
         }
         File selectedFile = chooser.getSelectedFile();
-        statusLabel.setText("状态: 正在解析简历...");
+        statusLabel.setText("正在解析简历...");
         new SwingWorker<String, Void>() {
             @Override
             protected String doInBackground() throws Exception {
@@ -323,14 +223,16 @@ public class MainFrame extends JFrame {
                 try {
                     String text = get();
                     if (text.trim().isEmpty()) {
-                        statusLabel.setText("状态: 简历解析完成，但未提取到文本");
+                        statusLabel.setText("简历解析完成，但未提取到文本");
                         JOptionPane.showMessageDialog(MainFrame.this, "未识别到简历文本，请确认 PDF 不是图片扫描版。");
                         return;
                     }
-                    resumeArea.setText(text);
-                    statusLabel.setText("状态: 简历解析完成");
+                    resumeText = text;
+                    resumeStatusLabel.setText("简历已导入");
+                    resumeStatusLabel.setForeground(new Color(22, 101, 52));
+                    statusLabel.setText("简历导入成功");
                 } catch (Exception ex) {
-                    statusLabel.setText("状态: 简历解析失败");
+                    statusLabel.setText("简历解析失败");
                     JOptionPane.showMessageDialog(MainFrame.this, "解析失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                 }
             }
@@ -339,16 +241,15 @@ public class MainFrame extends JFrame {
 
     private void onAnalyze() {
         String transcript = transcriptArea.getText().trim();
-        if (transcript.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "请先输入或粘贴面试官问题转写内容。");
+        if (transcript.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "请先输入或等待识别到面试官问题。");
             return;
         }
         analyzeText(transcript, false);
     }
 
     private void analyzeText(String transcript, boolean autoTriggered) {
-        String resumeText = resumeArea.getText().trim();
-        statusLabel.setText(autoTriggered ? "状态: 已识别一句话，正在自动生成建议..." : "状态: 正在调用 DeepSeek 生成回答建议...");
+        statusLabel.setText(autoTriggered ? "已识别一句话，正在生成回答..." : "正在生成回答...");
 
         analyzeExecutor.submit(new Runnable() {
             @Override
@@ -358,17 +259,16 @@ public class MainFrame extends JFrame {
                     SwingUtilities.invokeLater(new Runnable() {
                         @Override
                         public void run() {
-                            intentArea.setText(analysis.getQuestionIntent());
                             pointsArea.setText(analysis.getKeyPoints());
                             answerArea.setText(analysis.getSuggestedAnswer());
-                            statusLabel.setText("状态: 生成完成");
+                            statusLabel.setText("生成完成");
                         }
                     });
                 } catch (Exception ex) {
                     SwingUtilities.invokeLater(new Runnable() {
                         @Override
                         public void run() {
-                            statusLabel.setText("状态: 生成失败");
+                            statusLabel.setText("生成失败");
                             JOptionPane.showMessageDialog(MainFrame.this, "调用失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                         }
                     });
@@ -381,31 +281,18 @@ public class MainFrame extends JFrame {
         if (speechListenerService.isRunning()) {
             speechListenerService.stop();
             listenButton.setText("开始监听");
+            listenButton.setBackground(new Color(22, 163, 74));
             return;
         }
 
-        String selectedMixer = mixerCombo.getSelectedItem() == null ? "" : mixerCombo.getSelectedItem().toString();
-        boolean useNativeSystemAudio = NATIVE_SYSTEM_AUDIO_OPTION.equals(selectedMixer);
-        String cleanedMixer = useNativeSystemAudio ? "" : stripUiSuffix(selectedMixer);
-        boolean looksLikeMicrophone = !useNativeSystemAudio && (selectedMixer.contains("不建议") || isMicrophoneName(selectedMixer));
-        if (selectedMixer.trim().isEmpty() || looksLikeMicrophone) {
+        if (!SystemAudioCaptureProviderFactory.hasNativeHelper()) {
             JOptionPane.showMessageDialog(this,
-                    "当前选择的不是系统声音/回环输入，不能开始监听。\n\n本项目只监听对方讲话/系统输出声音，不监听你自己的麦克风。\n\n如果是商用上线版本，请打包内置系统音频采集组件：\nWindows: native/windows/wasapi-loopback-capture.exe\nmacOS: native/macos/system-audio-capture\n\n当前未检测到内置采集组件，所以只能显示 JavaSound 可见的回环设备。",
-                    "请选择系统声音输入源",
-                    JOptionPane.WARNING_MESSAGE);
+                    "未检测到内置系统音频采集组件，不能开始监听。\n\n请确认已打包：\nWindows: native/windows/wasapi-loopback-capture.exe\nmacOS: native/macos/system-audio-capture",
+                    "缺少音频采集组件",
+                    JOptionPane.ERROR_MESSAGE);
+            refreshSystemAudioStatus();
             return;
         }
-        if (!useNativeSystemAudio && !isVirtualCableName(cleanedMixer) && isStereoMixName(cleanedMixer)) {
-            int confirm = JOptionPane.showConfirmDialog(this,
-                    "你当前选择的是 Stereo Mix/立体声混音。它依赖 Realtek 物理播放链路，无法稳定支持蓝牙耳机、USB耳机、HDMI、无音响台式机等场景。\n\n商用上线版本应随客户端内置系统音频采集组件：Windows 使用 WASAPI Loopback，macOS 使用 ScreenCaptureKit。当前如果没有打包该组件，会回退到 JavaSound/Stereo Mix。\n\n是否仍然用 Stereo Mix 继续测试？",
-                    "建议使用内置系统音频采集组件",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.WARNING_MESSAGE);
-            if (confirm != JOptionPane.YES_OPTION) {
-                return;
-            }
-        }
-        selectedMixer = cleanedMixer;
 
         speechListenerService.start(new SpeechListenerService.Callback() {
             @Override
@@ -413,11 +300,13 @@ public class MainFrame extends JFrame {
                 SwingUtilities.invokeLater(new Runnable() {
                     @Override
                     public void run() {
-                        statusLabel.setText("状态: " + text);
+                        statusLabel.setText(text);
                         if ("监听已停止".equals(text)) {
                             listenButton.setText("开始监听");
-                        } else if (text.startsWith("监听中")) {
+                            listenButton.setBackground(new Color(22, 163, 74));
+                        } else if (text.startsWith("监听") || text.startsWith("正在使用")) {
                             listenButton.setText("停止监听");
+                            listenButton.setBackground(new Color(220, 38, 38));
                         }
                     }
                 });
@@ -428,7 +317,9 @@ public class MainFrame extends JFrame {
                 SwingUtilities.invokeLater(new Runnable() {
                     @Override
                     public void run() {
-                        partialSpeechArea.setText(text);
+                        if (!text.trim().isEmpty()) {
+                            appendTranscript(text.trim(), true);
+                        }
                     }
                 });
             }
@@ -441,8 +332,7 @@ public class MainFrame extends JFrame {
                 SwingUtilities.invokeLater(new Runnable() {
                     @Override
                     public void run() {
-                        partialSpeechArea.setText("");
-                        appendTranscript(text);
+                        appendTranscript(text, false);
                     }
                 });
                 analyzeText(text, true);
@@ -454,70 +344,32 @@ public class MainFrame extends JFrame {
                     @Override
                     public void run() {
                         listenButton.setText("开始监听");
-                        statusLabel.setText("状态: 监听失败");
+                        listenButton.setBackground(new Color(22, 163, 74));
+                        statusLabel.setText("监听失败");
                         JOptionPane.showMessageDialog(MainFrame.this, text, "错误", JOptionPane.ERROR_MESSAGE);
                     }
                 });
             }
-        }, selectedMixer);
+        }, "");
     }
 
-    private String buildMixerDisplayName(Mixer.Info info) {
-        String name = info.getName() == null ? "" : info.getName().trim();
-        String description = info.getDescription() == null ? "" : info.getDescription().trim();
-        if (description.isEmpty() || name.toLowerCase().contains(description.toLowerCase())) {
-            return name;
-        }
-        return name + "  [" + description + "]";
-    }
-
-    private String stripUiSuffix(String mixerName) {
-        if (mixerName == null) {
-            return "";
-        }
-        int detailStart = mixerName.indexOf("  [");
-        String cleaned = detailStart >= 0 ? mixerName.substring(0, detailStart) : mixerName;
-        return cleaned.replace("（麦克风/普通输入，不建议）", "").trim();
-    }
-
-    private boolean isVirtualCableName(String mixerName) {
-        String lower = mixerName == null ? "" : mixerName.toLowerCase();
-        return isVirtualCableText(lower);
-    }
-
-    private boolean isStereoMixName(String mixerName) {
-        String lower = mixerName == null ? "" : mixerName.toLowerCase();
-        return lower.contains("stereo mix")
-                || lower.contains("立体声混音")
-                || lower.contains("立體聲混音")
-                || lower.contains("what u hear")
-                || lower.contains("what you hear")
-                || lower.contains("wave out mix");
-    }
-
-    private boolean isMicrophoneName(String mixerName) {
-        String lower = mixerName == null ? "" : mixerName.toLowerCase();
-        return lower.contains("microphone")
-                || lower.contains("mic")
-                || lower.contains("麦克风")
-                || lower.contains("麦克風")
-                || lower.contains("array");
-    }
-
-    private void appendTranscript(String text) {
+    private void appendTranscript(String text, boolean partial) {
         String current = transcriptArea.getText();
-        if (current.trim().isEmpty()) {
-            transcriptArea.setText(text);
+        if (partial) {
+            statusLabel.setText("识别中: " + text);
             return;
         }
-        transcriptArea.setText(current + "\n" + text);
+        if (current.trim().isEmpty()) {
+            transcriptArea.setText(text);
+        } else {
+            transcriptArea.setText(current + "\n" + text);
+        }
     }
 
     private void clearResult() {
-        intentArea.setText("");
+        transcriptArea.setText("");
         pointsArea.setText("");
         answerArea.setText("");
-        partialSpeechArea.setText("");
-        statusLabel.setText("状态: 已清空输出");
+        statusLabel.setText("已清空");
     }
 }

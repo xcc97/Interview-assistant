@@ -1,2 +1,11 @@
 **/*.class
 /target/
+
+# Native build outputs
+native/windows/wasapi-loopback-capture/build/
+native/macos/system-audio-capture/.build/
+
+# IDE/local files
+.idea/workspace.xml
+.idea/CopilotChatHistory.xml
+.idea/CopilotChatTabs.xml

@@ -7,19 +7,11 @@ import com.interviewassistant.service.audio.SystemAudioCaptureProviderFactory;
 import org.vosk.Model;
 import org.vosk.Recognizer;
 
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioInputStream;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.DataLine;
-import javax.sound.sampled.Line;
-import javax.sound.sampled.Mixer;
-import javax.sound.sampled.TargetDataLine;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SpeechListenerService {
@@ -39,7 +31,6 @@ public class SpeechListenerService {
     private final AppConfig config;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private Thread worker;
-    private TargetDataLine line;
     private PcmAudioCaptureProvider captureProvider;
 
     public SpeechListenerService(AppConfig config) {
@@ -87,10 +78,6 @@ public class SpeechListenerService {
         if (captureProvider != null) {
             captureProvider.stop();
         }
-        if (line != null) {
-            line.stop();
-            line.close();
-        }
     }
 
     private void doListen(File modelDir, Callback callback, String mixerName) {
@@ -115,7 +102,7 @@ public class SpeechListenerService {
             System.out.println("[VOSK-DIAG] initializing Model with path=" + stagedModelDir.getAbsolutePath());
             try (Model model = new Model(stagedModelDir.getAbsolutePath());
                  Recognizer recognizer = new Recognizer(model, SAMPLE_RATE)) {
-                captureProvider = SystemAudioCaptureProviderFactory.create(mixerName);
+                captureProvider = SystemAudioCaptureProviderFactory.create();
                 callback.onStatus("音频采集方式: " + captureProvider.getName());
                 final long[] totalBytes = new long[]{0L};
                 final long[] lastLevelLog = new long[]{System.currentTimeMillis()};
@@ -176,337 +163,9 @@ public class SpeechListenerService {
             }
         } finally {
             running.set(false);
-            if (line != null) {
-                line.stop();
-                line.close();
+            if (captureProvider != null) {
+                captureProvider.stop();
             }
-        }
-    }
-
-    private Mixer resolveMixer(String mixerName) {
-        if (mixerName == null) {
-            return null;
-        }
-        String needle = stripUiSuffix(mixerName.trim()).toLowerCase();
-        if (needle.isEmpty()) {
-            return null;
-        }
-        try {
-            Mixer.Info[] infos = AudioSystem.getMixerInfo();
-            Mixer fallback = null;
-            for (int i = 0; i < infos.length; i++) {
-                Mixer.Info info = infos[i];
-                Mixer candidate = AudioSystem.getMixer(info);
-                if (!isInputCapable(candidate)) {
-                    continue;
-                }
-                String haystack = ((info.getName() == null ? "" : info.getName()) + " "
-                        + (info.getDescription() == null ? "" : info.getDescription())).toLowerCase();
-                if (!haystack.contains(needle) && !needle.contains(info.getName() == null ? "" : info.getName().toLowerCase())) {
-                    continue;
-                }
-                if (fallback == null) {
-                    fallback = candidate;
-                }
-                if (!isPortMixer(info)) {
-                    return candidate;
-                }
-            }
-            return fallback;
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
-
-    private List<AudioFormat> buildCandidateFormats() {
-        // 不同声卡/驱动支持的 PCM 输入格式差异很大；
-        // 这里尽量覆盖常见组合，找到一个可打开的输入后再转码给 VOSK。
-        Float[] sampleRates = new Float[]{48000.0f, 44100.0f, 32000.0f, 16000.0f, 8000.0f};
-        Integer[] sampleSizes = new Integer[]{16, 24, 32};
-        Integer[] channels = new Integer[]{1, 2};
-        Boolean[] signedOptions = new Boolean[]{true, false};
-        Boolean[] bigEndianOptions = new Boolean[]{false, true};
-
-        java.util.ArrayList<AudioFormat> formats = new java.util.ArrayList<AudioFormat>();
-        for (int i = 0; i < sampleRates.length; i++) {
-            for (int j = 0; j < sampleSizes.length; j++) {
-                for (int k = 0; k < channels.length; k++) {
-                    for (int a = 0; a < signedOptions.length; a++) {
-                        for (int b = 0; b < bigEndianOptions.length; b++) {
-                            formats.add(new AudioFormat(sampleRates[i], sampleSizes[j], channels[k], signedOptions[a], bigEndianOptions[b]));
-                        }
-                    }
-                }
-            }
-        }
-        return formats;
-    }
-
-    private CaptureSession openBestCaptureSession(AudioFormat targetFormat, Mixer preferredMixer, List<AudioFormat> candidateFormats) {
-        if (preferredMixer != null) {
-            CaptureSession preferred = tryOpenOnMixer(preferredMixer, targetFormat, candidateFormats);
-            if (preferred != null) {
-                return preferred;
-            }
-        }
-
-        Mixer.Info[] infos = AudioSystem.getMixerInfo();
-        for (int pass = 0; pass < 2; pass++) {
-            for (int i = 0; i < infos.length; i++) {
-                Mixer m = AudioSystem.getMixer(infos[i]);
-                if (!isInputCapable(m) || !isSystemAudioInput(infos[i])) {
-                    continue;
-                }
-                if (preferredMixer != null && sameMixer(preferredMixer, m)) {
-                    continue;
-                }
-                if (pass == 0 && isPortMixer(infos[i])) {
-                    continue;
-                }
-                CaptureSession session = tryOpenOnMixer(m, targetFormat, candidateFormats);
-                if (session != null) {
-                    return session;
-                }
-            }
-        }
-        return null;
-    }
-
-    private CaptureSession tryOpenOnMixer(Mixer mixer, AudioFormat targetFormat, List<AudioFormat> candidateFormats) {
-        List<AudioFormat> orderedFormats = new java.util.ArrayList<AudioFormat>();
-        orderedFormats.addAll(getMixerFormats(mixer));
-        for (int i = 0; i < candidateFormats.size(); i++) {
-            AudioFormat fmt = candidateFormats.get(i);
-            if (!containsEquivalentFormat(orderedFormats, fmt)) {
-                orderedFormats.add(fmt);
-            }
-        }
-
-        for (int i = 0; i < orderedFormats.size(); i++) {
-            AudioFormat fmt = orderedFormats.get(i);
-            TargetDataLine tryLine = null;
-            try {
-                DataLine.Info info = new DataLine.Info(TargetDataLine.class, fmt);
-                if (!mixer.isLineSupported(info)) {
-                    continue;
-                }
-                tryLine = (TargetDataLine) mixer.getLine(info);
-                tryLine.open(fmt);
-                AudioInputStream sourceStream = new AudioInputStream(tryLine);
-                AudioInputStream converted = AudioSystem.getAudioInputStream(targetFormat, sourceStream);
-                return new CaptureSession(tryLine, fmt, converted);
-            } catch (Exception ignored) {
-                closeQuietly(tryLine);
-            }
-        }
-        return null;
-    }
-
-    private List<AudioFormat> getMixerFormats(Mixer mixer) {
-        java.util.ArrayList<AudioFormat> formats = new java.util.ArrayList<AudioFormat>();
-        Line.Info[] lineInfos = mixer.getTargetLineInfo();
-        for (int i = 0; i < lineInfos.length; i++) {
-            if (!(lineInfos[i] instanceof DataLine.Info)) {
-                continue;
-            }
-            AudioFormat[] supported = ((DataLine.Info) lineInfos[i]).getFormats();
-            for (int j = 0; j < supported.length; j++) {
-                AudioFormat fmt = supported[j];
-                if (fmt != null && !containsEquivalentFormat(formats, fmt)) {
-                    formats.add(fmt);
-                }
-            }
-        }
-        return formats;
-    }
-
-    private boolean containsEquivalentFormat(List<AudioFormat> formats, AudioFormat target) {
-        for (int i = 0; i < formats.size(); i++) {
-            AudioFormat f = formats.get(i);
-            if (f.getSampleRate() == target.getSampleRate()
-                    && f.getSampleSizeInBits() == target.getSampleSizeInBits()
-                    && f.getChannels() == target.getChannels()
-                    && f.isBigEndian() == target.isBigEndian()
-                    && f.getEncoding().equals(target.getEncoding())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void closeQuietly(TargetDataLine line) {
-        if (line == null) {
-            return;
-        }
-        try {
-            line.close();
-        } catch (Exception ignored) {
-        }
-    }
-
-    private boolean isInputCapable(Mixer mixer) {
-        if (mixer == null) {
-            return false;
-        }
-        Line.Info[] targets = mixer.getTargetLineInfo();
-        if (targets == null || targets.length == 0) {
-            return false;
-        }
-        for (int i = 0; i < targets.length; i++) {
-            if (targets[i] instanceof DataLine.Info) {
-                DataLine.Info info = (DataLine.Info) targets[i];
-                if (TargetDataLine.class.isAssignableFrom(info.getLineClass())) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private boolean isPortMixer(Mixer.Info info) {
-        String text = ((info.getName() == null ? "" : info.getName()) + " "
-                + (info.getDescription() == null ? "" : info.getDescription())).toLowerCase();
-        return text.contains("port mixer") || text.startsWith("port ");
-    }
-
-    private String stripUiSuffix(String mixerName) {
-        if (mixerName == null) {
-            return "";
-        }
-        int detailStart = mixerName.indexOf("  [");
-        String cleaned = detailStart >= 0 ? mixerName.substring(0, detailStart) : mixerName;
-        return cleaned.replace("（麦克风/普通输入，不建议）", "").trim();
-    }
-
-    private boolean sameMixer(Mixer a, Mixer b) {
-        if (a == null || b == null || a.getMixerInfo() == null || b.getMixerInfo() == null) {
-            return false;
-        }
-        return a.getMixerInfo().getName().equalsIgnoreCase(b.getMixerInfo().getName());
-    }
-
-    private String describeMixer(Mixer mixer) {
-        if (mixer == null || mixer.getMixerInfo() == null) {
-            return "<未匹配到指定 Mixer，将自动选择系统声音输入源>";
-        }
-        Mixer.Info info = mixer.getMixerInfo();
-        return info.getName() + " | " + info.getDescription() + " | " + info.getVendor() + " | " + info.getVersion();
-    }
-
-    private boolean isSystemAudioInput(Mixer.Info info) {
-        String text = getMixerSearchText(info);
-        return isVirtualCableText(text)
-                || text.contains("stereo mix")
-                || text.contains("立体声混音")
-                || text.contains("立體聲混音")
-                || text.contains("loopback")
-                || text.contains("blackhole")
-                || text.contains("soundflower")
-                || text.contains("what u hear")
-                || text.contains("what you hear")
-                || text.contains("wave out mix")
-                || text.contains("monitor of")
-                || text.contains("wasapi");
-    }
-
-    private boolean isVirtualCableText(String text) {
-        return text.contains("vb-audio")
-                || text.contains("vb audio")
-                || text.contains("cable output")
-                || text.contains("cable-output")
-                || text.contains("cable out")
-                || text.contains("virtual cable")
-                || text.contains("virtual-audio");
-    }
-
-    private String getMixerSearchText(Mixer.Info info) {
-        return ((info.getName() == null ? "" : info.getName()) + " "
-                + (info.getDescription() == null ? "" : info.getDescription())).toLowerCase();
-    }
-
-    private String listInputMixerNames() {
-        java.util.ArrayList<String> names = new java.util.ArrayList<String>();
-        Mixer.Info[] infos = AudioSystem.getMixerInfo();
-        for (int i = 0; i < infos.length; i++) {
-            Mixer m = AudioSystem.getMixer(infos[i]);
-            if (isInputCapable(m) && infos[i].getName() != null && !infos[i].getName().trim().isEmpty()) {
-                names.add(infos[i].getName().trim());
-            }
-        }
-        if (names.isEmpty()) {
-            return "无";
-        }
-        return String.join(", ", names);
-    }
-
-    private String listSystemAudioInputNames() {
-        java.util.ArrayList<String> names = new java.util.ArrayList<String>();
-        Mixer.Info[] infos = AudioSystem.getMixerInfo();
-        for (int i = 0; i < infos.length; i++) {
-            Mixer m = AudioSystem.getMixer(infos[i]);
-            if (isInputCapable(m) && isSystemAudioInput(infos[i]) && infos[i].getName() != null && !infos[i].getName().trim().isEmpty()) {
-                names.add(infos[i].getName().trim());
-            }
-        }
-        if (names.isEmpty()) {
-            return "无";
-        }
-        return String.join(", ", names);
-    }
-
-    private String buildAudioDiagnostics() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("[AUDIO-DIAG] os.name=").append(System.getProperty("os.name", "")).append('\n');
-        sb.append("[AUDIO-DIAG] java.version=").append(System.getProperty("java.version", "")).append('\n');
-        Mixer.Info[] infos = AudioSystem.getMixerInfo();
-        sb.append("[AUDIO-DIAG] mixer.count=").append(infos.length).append('\n');
-        for (int i = 0; i < infos.length; i++) {
-            Mixer.Info info = infos[i];
-            Mixer mixer = AudioSystem.getMixer(info);
-            sb.append("[AUDIO-DIAG] mixer[").append(i).append("] name=").append(info.getName())
-                    .append(", vendor=").append(info.getVendor())
-                    .append(", version=").append(info.getVersion())
-                    .append(", desc=").append(info.getDescription()).append('\n');
-            appendLineInfos(sb, "target", mixer.getTargetLineInfo());
-            appendLineInfos(sb, "source", mixer.getSourceLineInfo());
-        }
-        return sb.toString();
-    }
-
-    private void appendLineInfos(StringBuilder sb, String label, Line.Info[] lineInfos) {
-        if (lineInfos == null || lineInfos.length == 0) {
-            sb.append("[AUDIO-DIAG]   ").append(label).append(" lines=<none>").append('\n');
-            return;
-        }
-        for (int i = 0; i < lineInfos.length; i++) {
-            Line.Info lineInfo = lineInfos[i];
-            sb.append("[AUDIO-DIAG]   ").append(label).append("[").append(i).append("] class=")
-                    .append(lineInfo.getLineClass().getName()).append(", info=").append(lineInfo).append('\n');
-            if (lineInfo instanceof DataLine.Info) {
-                AudioFormat[] formats = ((DataLine.Info) lineInfo).getFormats();
-                if (formats == null || formats.length == 0) {
-                    sb.append("[AUDIO-DIAG]     formats=<unspecified>").append('\n');
-                } else {
-                    for (int j = 0; j < formats.length && j < 8; j++) {
-                        sb.append("[AUDIO-DIAG]     format[").append(j).append("]=").append(formats[j]).append('\n');
-                    }
-                    if (formats.length > 8) {
-                        sb.append("[AUDIO-DIAG]     ... total formats=").append(formats.length).append('\n');
-                    }
-                }
-            }
-        }
-    }
-
-    private static class CaptureSession {
-        private final TargetDataLine line;
-        private final AudioFormat captureFormat;
-        private final AudioInputStream convertedStream;
-
-        private CaptureSession(TargetDataLine line, AudioFormat captureFormat, AudioInputStream convertedStream) {
-            this.line = line;
-            this.captureFormat = captureFormat;
-            this.convertedStream = convertedStream;
         }
     }
 

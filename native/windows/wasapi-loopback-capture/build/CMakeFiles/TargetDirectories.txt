@@ -1,3 +1,0 @@
-D:/面试助手项目/native/windows/wasapi-loopback-capture/build/CMakeFiles/wasapi-loopback-capture.dir
-D:/面试助手项目/native/windows/wasapi-loopback-capture/build/CMakeFiles/ALL_BUILD.dir
-D:/面试助手项目/native/windows/wasapi-loopback-capture/build/CMakeFiles/ZERO_CHECK.dir
