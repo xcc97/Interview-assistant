@@ -219,10 +219,10 @@ public class MainFrame extends JFrame {
 
     private void refreshSystemAudioStatus() {
         if (SystemAudioCaptureProviderFactory.hasNativeHelper()) {
-            audioStatusLabel.setText("音频: 内置系统采集已就绪");
+            audioStatusLabel.setText("音频: 内置采集已就绪 | 识别: 阿里云实时 ASR");
             audioStatusLabel.setForeground(new Color(22, 101, 52));
         } else {
-            audioStatusLabel.setText("音频: 未检测到内置采集组件");
+            audioStatusLabel.setText("音频: 未检测到内置采集组件 | 识别: 阿里云实时 ASR");
             audioStatusLabel.setForeground(new Color(185, 28, 28));
         }
     }

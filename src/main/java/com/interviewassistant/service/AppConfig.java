@@ -11,6 +11,7 @@ public class AppConfig {
     private static final String DEFAULT_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
     private static final String DEFAULT_MODEL = "deepseek-v3";
     private static final int DEFAULT_MIN_TEXT_LENGTH = 6;
+    private static final String DEFAULT_ASR_PROVIDER = "aliyun";
 
     private final Properties properties = new Properties();
 
@@ -42,15 +43,53 @@ public class AppConfig {
         return model.isEmpty() ? DEFAULT_MODEL : model;
     }
 
-    public String getVoskModelPath() {
-        String fromEnv = System.getenv("VOSK_MODEL_PATH");
-        String rawPath;
+    public String getAsrProvider() {
+        String fromEnv = System.getenv("ASR_PROVIDER");
         if (fromEnv != null && !fromEnv.trim().isEmpty()) {
-            rawPath = fromEnv.trim();
-        } else {
-            rawPath = properties.getProperty("asr.voskModelPath", "").trim();
+            return fromEnv.trim();
         }
-        return resolvePath(rawPath);
+        String provider = properties.getProperty("asr.provider", DEFAULT_ASR_PROVIDER).trim();
+        return provider.isEmpty() ? DEFAULT_ASR_PROVIDER : provider;
+    }
+
+    public String getAliyunNlsAppKey() {
+        String fromEnv = System.getenv("ALIYUN_NLS_APP_KEY");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
+        }
+        return properties.getProperty("aliyun.nls.appKey", "").trim();
+    }
+
+    public String getAliyunNlsToken() {
+        String fromEnv = System.getenv("ALIYUN_NLS_TOKEN");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
+        }
+        return properties.getProperty("aliyun.nls.token", "").trim();
+    }
+
+    public String getAliyunAccessKeyId() {
+        String fromEnv = System.getenv("ALIYUN_ACCESS_KEY_ID");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
+        }
+        return properties.getProperty("aliyun.accessKeyId", "").trim();
+    }
+
+    public String getAliyunAccessKeySecret() {
+        String fromEnv = System.getenv("ALIYUN_ACCESS_KEY_SECRET");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
+        }
+        return properties.getProperty("aliyun.accessKeySecret", "").trim();
+    }
+
+    public String getAliyunNlsEndpoint() {
+        String fromEnv = System.getenv("ALIYUN_NLS_ENDPOINT");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
+        }
+        return properties.getProperty("aliyun.nls.endpoint", "").trim();
     }
 
     private String resolvePath(String rawPath) {
@@ -135,15 +174,28 @@ public class AppConfig {
         sb.append("os.arch = ").append(System.getProperty("os.arch", "")).append('\n');
         sb.append("java.version = ").append(System.getProperty("java.version", "")).append('\n');
         sb.append("user.dir = ").append(System.getProperty("user.dir", "")).append('\n');
-        sb.append("app.config.model = ").append(properties.getProperty("asr.voskModelPath", "")).append('\n');
-        sb.append("env.VOSK_MODEL_PATH = ").append(safeEnv("VOSK_MODEL_PATH")).append('\n');
-        sb.append("resolved.voskModelPath = ").append(getVoskModelPath()).append('\n');
+        sb.append("resolved.asrProvider = ").append(getAsrProvider()).append('\n');
         sb.append("resolved.asrMixerName = ").append(getAsrMixerName()).append('\n');
+        sb.append("resolved.aliyunNlsAppKey = ").append(maskValue(getAliyunNlsAppKey())).append('\n');
+        sb.append("resolved.aliyunNlsToken = ").append(maskValue(getAliyunNlsToken())).append('\n');
+        sb.append("resolved.aliyunAccessKeyId = ").append(maskValue(getAliyunAccessKeyId())).append('\n');
+        sb.append("resolved.aliyunNlsEndpoint = ").append(getAliyunNlsEndpoint()).append('\n');
         return sb.toString();
     }
 
     private String safeEnv(String name) {
         String value = System.getenv(name);
         return value == null ? "" : value.trim();
+    }
+
+    private String maskValue(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return "";
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() <= 8) {
+            return "****";
+        }
+        return trimmed.substring(0, 4) + "****" + trimmed.substring(trimmed.length() - 4);
     }
 }

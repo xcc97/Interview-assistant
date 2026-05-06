@@ -3,26 +3,27 @@
 这是一个桌面端远程面试辅助工具原型，核心能力：
 
 - 导入 PDF 简历并解析文本
-- 自动监听语音并实时转写（VOSK 本地识别）
+- 自动监听会议系统音频并实时转写（阿里云实时 ASR）
 - 自动判定一句话结束后触发回答生成
-- 输入/粘贴面试官语音转写内容（兼容手动模式）
-- 调用阿里云百炼兼容模式下的 DeepSeek 模型生成：
-  - 提问意图
-  - 回答要点
-  - 参考回答（可直接口述）
+- 手动补充漏识别的问题
+- 调用阿里云百炼兼容模式下的 DeepSeek 模型生成可直接口述的简洁回答
 
 ## 技术栈
 
-- Java 8+
+- Java 21
 - Swing（桌面 UI）
 - Apache PDFBox（PDF 文本提取）
 - OkHttp + Jackson（调用百炼 DeepSeek API）
-- VOSK（本地语音识别）
+- 阿里云 NLS 实时语音识别
 
 ## 快速开始
 
-1. 安装 Java 8+ 与 Maven 3.9+
-2. 配置 API Key（推荐环境变量）
+1. 安装 Java 21+
+2. 配置百炼 API Key
+3. 配置阿里云 NLS 实时语音识别
+4. 构建并运行桌面端
+
+### 1) 配置百炼 API Key
 
 Windows PowerShell：
 
@@ -36,48 +37,55 @@ macOS / zsh：
 export BAILIAN_API_KEY="你的阿里云百炼APIKey"
 ```
 
-也可以在 `src/main/resources/application.properties` 中填写 `bailian.apiKey`。
+### 2) 配置阿里云 NLS
 
-3. 下载 VOSK 中文模型（示例：`vosk-model-small-cn-0.22`），解压到本机目录，例如：
+推荐开发阶段直接用环境变量；正式商业化时建议由你自己的后端签发临时 Token，不要把 AccessKey 固化在客户端。
 
-Windows：`D:\models\vosk-model-small-cn-0.22`
-
-macOS：`/Users/yourname/models/vosk-model-small-cn-0.22`
-
-4. 配置模型路径（二选一）
-
-Windows PowerShell：
-
-```powershell
-$env:VOSK_MODEL_PATH="D:\models\vosk-model-small-cn-0.22"
-```
-
-macOS / zsh：
+方式 A：直接提供临时 Token
 
 ```bash
-export VOSK_MODEL_PATH="/Users/yourname/models/vosk-model-small-cn-0.22"
+export ALIYUN_NLS_APP_KEY="你的NLS AppKey"
+export ALIYUN_NLS_TOKEN="你的NLS Token"
 ```
 
-也可以在 `src/main/resources/application.properties` 填 `asr.voskModelPath`。
+方式 B：提供 AccessKey，由客户端运行时换 Token
 
-5. 运行
+```bash
+export ALIYUN_NLS_APP_KEY="你的NLS AppKey"
+export ALIYUN_ACCESS_KEY_ID="你的AccessKeyId"
+export ALIYUN_ACCESS_KEY_SECRET="你的AccessKeySecret"
+```
+
+如有需要，也可以设置：
+
+```bash
+export ALIYUN_NLS_ENDPOINT="wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1"
+```
+
+### 3) 运行
+
+如果本机安装了 Maven：
 
 ```bash
 mvn compile exec:java
 ```
 
+如果你主要在 IntelliJ 中运行，也可以直接运行 `com.interviewassistant.Main`。
+
 ## 使用步骤
 
-1. 点击 `导入简历 PDF`，选择你的简历
+1. 点击 `导入简历`，选择你的简历 PDF
 2. 点击 `开始监听`
-3. 当识别到一句完整话语（中间短停顿不会触发，结束停顿会触发）后，系统会自动：
-   - 追加到“面试官问题”区域
-   - 调用 DeepSeek 生成提问意图、回答要点、参考回答
-4. 你也可手动输入文本并点击 `分析并生成回答`
+3. 当识别到一句完整问题后，系统会自动：
+   - 生成一张新的问答卡片
+   - 调用 DeepSeek 生成口语化回答
+4. 如果语音漏识别，也可以点击 `手动补充` 手动输入问题
 
-## 会议场景建议
+## 音频说明
 
-- 如果你希望“扬声器和耳机都能通用”（不管你把面试声音输出到哪里），关键是：让程序识别到“系统输出回环”的音频，而不是普通麦克风。
-- Windows：尽量在系统里启用录音设备 `立体声混音 / Stereo Mix`（或声卡提供的 Loopback），然后在程序窗口的 `监听输入源` 下拉框里选择它。
-- mac：通常需要安装虚拟音频驱动（如 BlackHole / Loopback），把它创建出的输入设备选为 `监听输入源`，这样程序才能识别系统输出（扬声器/耳机都通）。
-- 如果你没有回环设备：可以退而求其次选择麦克风输入（你说话/环境里的声音能否采到对方取决于你现场）。
+本项目仍然使用本地系统音频采集 helper：
+
+- Windows：`native/windows/wasapi-loopback-capture.exe`
+- macOS：`native/macos/system-audio-capture`
+
+它们负责抓取会议系统声音；真正的语音转文字已经切换为阿里云实时 ASR，不再使用本地 Vosk 模型。
