@@ -8,6 +8,8 @@ import com.interviewassistant.service.SpeechListenerService;
 import com.interviewassistant.service.audio.SystemAudioCaptureProviderFactory;
 
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -15,8 +17,8 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.WindowConstants;
@@ -24,21 +26,23 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainFrame extends JFrame {
-    private final JTextArea transcriptArea = new JTextArea();
-    private final JTextArea pointsArea = new JTextArea();
-    private final JTextArea answerArea = new JTextArea();
     private final JLabel statusLabel = new JLabel("就绪");
     private final JLabel resumeStatusLabel = new JLabel("未导入简历");
     private final JLabel audioStatusLabel = new JLabel("系统音频采集组件检测中...");
+    private final JPanel conversationListPanel = new JPanel();
+    private final JScrollPane conversationScrollPane = new JScrollPane();
 
     private final AppConfig config = new AppConfig();
     private final PdfResumeParser pdfResumeParser = new PdfResumeParser();
@@ -46,6 +50,7 @@ public class MainFrame extends JFrame {
     private final SpeechListenerService speechListenerService = new SpeechListenerService(config);
     private final ExecutorService analyzeExecutor = Executors.newSingleThreadExecutor();
 
+    private final List<ConversationEntry> entries = new ArrayList<ConversationEntry>();
     private String resumeText = "";
     private JButton listenButton;
 
@@ -68,52 +73,23 @@ public class MainFrame extends JFrame {
         header.setOpaque(false);
         JLabel title = new JLabel("远程面试助手");
         title.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 24));
-        JLabel subtitle = new JLabel("自动监听电脑会议声音，生成回答要点与参考回答");
-        subtitle.setForeground(new Color(90, 99, 115));
-        subtitle.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 13));
-        JPanel titlePanel = new JPanel(new GridLayout(2, 1));
-        titlePanel.setOpaque(false);
-        titlePanel.add(title);
-        titlePanel.add(subtitle);
-        header.add(titlePanel, BorderLayout.WEST);
+        title.setForeground(new Color(15, 23, 42));
+        header.add(title, BorderLayout.WEST);
         header.add(buildToolbar(), BorderLayout.EAST);
         root.add(header, BorderLayout.NORTH);
 
-        transcriptArea.setLineWrap(true);
-        transcriptArea.setWrapStyleWord(true);
-        transcriptArea.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 15));
-        transcriptArea.setBorder(new EmptyBorder(10, 10, 10, 10));
+        conversationListPanel.setOpaque(false);
+        conversationListPanel.setLayout(new BoxLayout(conversationListPanel, BoxLayout.Y_AXIS));
 
-        pointsArea.setEditable(false);
-        pointsArea.setLineWrap(true);
-        pointsArea.setWrapStyleWord(true);
-        pointsArea.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 15));
-        pointsArea.setBorder(new EmptyBorder(10, 10, 10, 10));
+        JPanel listContainer = new JPanel(new BorderLayout());
+        listContainer.setOpaque(false);
+        listContainer.add(conversationListPanel, BorderLayout.NORTH);
 
-        answerArea.setEditable(false);
-        answerArea.setLineWrap(true);
-        answerArea.setWrapStyleWord(true);
-        answerArea.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 15));
-        answerArea.setBorder(new EmptyBorder(10, 10, 10, 10));
+        conversationScrollPane.setViewportView(listContainer);
+        conversationScrollPane.setBorder(BorderFactory.createEmptyBorder());
+        conversationScrollPane.getViewport().setBackground(new Color(245, 247, 251));
 
-        JSplitPane leftSplit = new JSplitPane(
-                JSplitPane.VERTICAL_SPLIT,
-                createCard("面试官问题", new JScrollPane(transcriptArea)),
-                createCard("回答要点", new JScrollPane(pointsArea))
-        );
-        leftSplit.setResizeWeight(0.55);
-        leftSplit.setBorder(null);
-        leftSplit.setDividerSize(8);
-
-        JSplitPane mainSplit = new JSplitPane(
-                JSplitPane.HORIZONTAL_SPLIT,
-                leftSplit,
-                createCard("参考回答", new JScrollPane(answerArea))
-        );
-        mainSplit.setResizeWeight(0.42);
-        mainSplit.setBorder(null);
-        mainSplit.setDividerSize(8);
-        root.add(mainSplit, BorderLayout.CENTER);
+        root.add(createMainCard("面试问答记录", conversationScrollPane), BorderLayout.CENTER);
 
         JPanel footer = new JPanel(new BorderLayout(12, 0));
         footer.setOpaque(false);
@@ -123,16 +99,16 @@ public class MainFrame extends JFrame {
         root.add(footer, BorderLayout.SOUTH);
 
         refreshSystemAudioStatus();
+        renderConversationCards();
     }
 
     private JPanel buildToolbar() {
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         toolbar.setOpaque(false);
 
         JButton importResumeButton = createButton("导入简历", new Color(238, 242, 255), new Color(67, 56, 202));
-        JButton analyzeButton = createButton("生成回答", new Color(37, 99, 235), Color.WHITE);
-        JButton clearButton = createButton("清空", new Color(243, 244, 246), new Color(55, 65, 81));
-        JButton audioHelpButton = createButton("音频说明", new Color(243, 244, 246), new Color(55, 65, 81));
+        JButton analyzeButton = createButton("手动补充", new Color(37, 99, 235), Color.WHITE);
+        JButton clearButton = createButton("清空记录", new Color(243, 244, 246), new Color(55, 65, 81));
         listenButton = createButton("开始监听", new Color(22, 163, 74), Color.WHITE);
 
         resumeStatusLabel.setForeground(new Color(107, 114, 128));
@@ -143,13 +119,11 @@ public class MainFrame extends JFrame {
         toolbar.add(listenButton);
         toolbar.add(analyzeButton);
         toolbar.add(clearButton);
-        toolbar.add(audioHelpButton);
 
         importResumeButton.addActionListener(e -> onImportResume());
         analyzeButton.addActionListener(e -> onAnalyze());
         clearButton.addActionListener(e -> clearResult());
         listenButton.addActionListener(e -> toggleListening());
-        audioHelpButton.addActionListener(e -> showAudioSetupHelp());
         return toolbar;
     }
 
@@ -158,31 +132,89 @@ public class MainFrame extends JFrame {
         button.setFocusPainted(false);
         button.setOpaque(true);
         button.setContentAreaFilled(true);
-        button.setBorderPainted(true);
+        button.setBorderPainted(false);
         button.setBackground(background);
         button.setForeground(foreground);
-        button.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 13));
-        button.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(229, 231, 235)),
-                new EmptyBorder(7, 13, 7, 13)
-        ));
+        button.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 13));
+        button.setBorder(new EmptyBorder(9, 16, 9, 16));
         return button;
     }
 
-    private JPanel createCard(String title, JScrollPane content) {
-        JPanel card = new JPanel(new BorderLayout(0, 8));
+    private JPanel createMainCard(String title, JScrollPane content) {
+        JPanel card = new JPanel(new BorderLayout(0, 14));
         card.setBackground(Color.WHITE);
         card.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(226, 232, 240)),
-                new EmptyBorder(12, 12, 12, 12)
+                new EmptyBorder(18, 18, 18, 18)
         ));
+
+        JPanel heading = new JPanel(new BorderLayout());
+        heading.setOpaque(false);
+
         JLabel label = new JLabel(title);
-        label.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 15));
+        label.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 18));
         label.setForeground(new Color(17, 24, 39));
-        content.setBorder(BorderFactory.createLineBorder(new Color(241, 245, 249)));
-        card.add(label, BorderLayout.NORTH);
+
+        JLabel tip = new JLabel("自动保留每一轮问答记录", SwingConstants.RIGHT);
+        tip.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 12));
+        tip.setForeground(new Color(100, 116, 139));
+
+        heading.add(label, BorderLayout.WEST);
+        heading.add(tip, BorderLayout.EAST);
+        card.add(heading, BorderLayout.NORTH);
         card.add(content, BorderLayout.CENTER);
         return card;
+    }
+
+    private JPanel createConversationCard(ConversationEntry entry) {
+        JPanel shadow = new JPanel(new BorderLayout());
+        shadow.setOpaque(true);
+        shadow.setBackground(new Color(226, 232, 240));
+        shadow.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        shadow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        shadow.setBorder(new EmptyBorder(0, 0, 2, 0));
+
+        JPanel card = new JPanel(new BorderLayout(0, 14));
+        card.setOpaque(true);
+        card.setBackground(Color.WHITE);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(226, 232, 240)),
+                new EmptyBorder(18, 18, 18, 18)
+        ));
+
+        JPanel questionPanel = createBubblePanel(new Color(239, 246, 255), new Color(147, 197, 253), "面试官问题", entry.question);
+        JPanel answerPanel = createBubblePanel(entry.answerBackground(), entry.answerBorder(), entry.answerTitle(), entry.answerText());
+
+        card.add(questionPanel, BorderLayout.NORTH);
+        card.add(answerPanel, BorderLayout.CENTER);
+        shadow.add(card, BorderLayout.CENTER);
+        return shadow;
+    }
+
+    private JPanel createBubblePanel(Color background, Color borderColor, String title, String text) {
+        JPanel panel = new JPanel(new BorderLayout(0, 10));
+        panel.setBackground(background);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(borderColor),
+                new EmptyBorder(14, 16, 14, 16)
+        ));
+
+        JLabel label = new JLabel(title);
+        label.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 14));
+        label.setForeground(new Color(31, 41, 55));
+
+        JTextArea textArea = new JTextArea(text);
+        textArea.setEditable(false);
+        textArea.setOpaque(false);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+        textArea.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 15));
+        textArea.setForeground(new Color(30, 41, 59));
+        textArea.setBorder(null);
+
+        panel.add(label, BorderLayout.NORTH);
+        panel.add(textArea, BorderLayout.CENTER);
+        return panel;
     }
 
     private void refreshSystemAudioStatus() {
@@ -193,16 +225,6 @@ public class MainFrame extends JFrame {
             audioStatusLabel.setText("音频: 未检测到内置采集组件");
             audioStatusLabel.setForeground(new Color(185, 28, 28));
         }
-    }
-
-    private void showAudioSetupHelp() {
-        JOptionPane.showMessageDialog(this,
-                "本版本只保留主方案：内置系统音频采集。\n\n"
-                        + "Windows: native/windows/wasapi-loopback-capture.exe\n"
-                        + "macOS: native/macos/system-audio-capture\n\n"
-                        + "如果底部显示未检测到内置采集组件，请重新打包客户端或检查 native helper 是否存在。",
-                "音频说明",
-                JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void onImportResume() {
@@ -243,35 +265,59 @@ public class MainFrame extends JFrame {
     }
 
     private void onAnalyze() {
-        String transcript = transcriptArea.getText().trim();
-        if (transcript.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "请先输入或等待识别到面试官问题。");
+        JTextArea inputArea = new JTextArea(6, 28);
+        inputArea.setLineWrap(true);
+        inputArea.setWrapStyleWord(true);
+        inputArea.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 14));
+        JScrollPane scrollPane = new JScrollPane(inputArea);
+        scrollPane.setPreferredSize(new Dimension(420, 180));
+
+        int result = JOptionPane.showConfirmDialog(
+                this,
+                scrollPane,
+                "手动补充面试官问题",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE
+        );
+        if (result != JOptionPane.OK_OPTION) {
             return;
         }
-        analyzeText(transcript, false);
+
+        String transcript = inputArea.getText();
+        if (transcript == null || transcript.trim().isEmpty()) {
+            return;
+        }
+        analyzeText(transcript.trim(), false);
     }
 
     private void analyzeText(String transcript, boolean autoTriggered) {
-        statusLabel.setText(autoTriggered ? "已识别一句话，正在生成回答..." : "正在生成回答...");
+        final ConversationEntry entry = new ConversationEntry(transcript.trim());
+        entries.add(entry);
+        renderConversationCards();
+        statusLabel.setText(autoTriggered ? "已识别到新问题，正在生成回答..." : "正在生成回答...");
 
         analyzeExecutor.submit(new Runnable() {
             @Override
             public void run() {
                 try {
-                    InterviewAnalysis analysis = deepSeekClient.analyzeQuestion(transcript, resumeText);
+                    InterviewAnalysis analysis = deepSeekClient.analyzeQuestion(entry.question, resumeText);
                     SwingUtilities.invokeLater(new Runnable() {
                         @Override
                         public void run() {
-                            pointsArea.setText(analysis.getKeyPoints());
-                            answerArea.setText(analysis.getSuggestedAnswer());
-                            statusLabel.setText("生成完成");
+                            entry.answer = safeTrim(analysis.getSuggestedAnswer());
+                            entry.loading = false;
+                            renderConversationCards();
+                            statusLabel.setText("回答生成完成");
                         }
                     });
                 } catch (Exception ex) {
                     SwingUtilities.invokeLater(new Runnable() {
                         @Override
                         public void run() {
-                            statusLabel.setText("生成失败");
+                            entry.loading = false;
+                            entry.error = ex.getMessage();
+                            renderConversationCards();
+                            statusLabel.setText("回答生成失败");
                             JOptionPane.showMessageDialog(MainFrame.this, "调用失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                         }
                     });
@@ -321,7 +367,7 @@ public class MainFrame extends JFrame {
                     @Override
                     public void run() {
                         if (!text.trim().isEmpty()) {
-                            appendTranscript(text.trim(), true);
+                            statusLabel.setText("识别中: " + text.trim());
                         }
                     }
                 });
@@ -332,12 +378,6 @@ public class MainFrame extends JFrame {
                 if (text.length() < config.getMinAutoAnalyzeLength()) {
                     return;
                 }
-                SwingUtilities.invokeLater(new Runnable() {
-                    @Override
-                    public void run() {
-                        appendTranscript(text, false);
-                    }
-                });
                 analyzeText(text, true);
             }
 
@@ -356,23 +396,113 @@ public class MainFrame extends JFrame {
         }, "");
     }
 
-    private void appendTranscript(String text, boolean partial) {
-        String current = transcriptArea.getText();
-        if (partial) {
-            statusLabel.setText("识别中: " + text);
-            return;
-        }
-        if (current.trim().isEmpty()) {
-            transcriptArea.setText(text);
+    private void renderConversationCards() {
+        conversationListPanel.removeAll();
+
+        if (entries.isEmpty()) {
+            conversationListPanel.add(createEmptyState());
         } else {
-            transcriptArea.setText(current + "\n" + text);
+            for (int i = 0; i < entries.size(); i++) {
+                conversationListPanel.add(createConversationCard(entries.get(i)));
+                if (i < entries.size() - 1) {
+                    conversationListPanel.add(Box.createVerticalStrut(14));
+                }
+            }
         }
+
+        conversationListPanel.revalidate();
+        conversationListPanel.repaint();
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                conversationScrollPane.getVerticalScrollBar().setValue(conversationScrollPane.getVerticalScrollBar().getMaximum());
+            }
+        });
+    }
+
+    private JPanel createEmptyState() {
+        JPanel empty = new JPanel(new BorderLayout());
+        empty.setOpaque(false);
+        empty.setBorder(new EmptyBorder(80, 20, 80, 20));
+        empty.setAlignmentX(Component.LEFT_ALIGNMENT);
+        empty.setMaximumSize(new Dimension(Integer.MAX_VALUE, 220));
+
+        JLabel label = new JLabel("开始监听后，这里会按顺序显示每一轮面试问答", JLabel.CENTER);
+        label.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 16));
+        label.setForeground(new Color(107, 114, 128));
+        empty.add(label, BorderLayout.CENTER);
+        return empty;
+    }
+
+    private String safeTrim(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private void clearResult() {
-        transcriptArea.setText("");
-        pointsArea.setText("");
-        answerArea.setText("");
-        statusLabel.setText("已清空");
+        if (entries.isEmpty()) {
+            statusLabel.setText("当前没有可清空的记录");
+            return;
+        }
+        int result = JOptionPane.showConfirmDialog(
+                this,
+                "确定要清空当前所有面试问答记录吗？此操作不可恢复。",
+                "清空记录",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+        if (result != JOptionPane.YES_OPTION) {
+            return;
+        }
+        entries.clear();
+        renderConversationCards();
+        statusLabel.setText("记录已清空");
+    }
+
+    private static final class ConversationEntry {
+        private final String question;
+        private String answer = "";
+        private boolean loading = true;
+        private String error;
+
+        private ConversationEntry(String question) {
+            this.question = question;
+        }
+
+        private String answerTitle() {
+            return error != null && !error.trim().isEmpty() ? "回答生成失败" : "回答";
+        }
+
+        private String answerText() {
+            if (loading) {
+                return "正在生成回答，请稍候...";
+            }
+            if (error != null && !error.trim().isEmpty()) {
+                return error.trim();
+            }
+            if (answer == null || answer.trim().isEmpty()) {
+                return "本次未生成有效回答。";
+            }
+            return answer.trim();
+        }
+
+        private Color answerBackground() {
+            if (loading) {
+                return new Color(255, 251, 235);
+            }
+            if (error != null && !error.trim().isEmpty()) {
+                return new Color(254, 242, 242);
+            }
+            return new Color(240, 253, 244);
+        }
+
+        private Color answerBorder() {
+            if (loading) {
+                return new Color(253, 224, 71);
+            }
+            if (error != null && !error.trim().isEmpty()) {
+                return new Color(252, 165, 165);
+            }
+            return new Color(134, 239, 172);
+        }
     }
 }

@@ -71,12 +71,14 @@ public class BailianDeepSeekClient {
     }
 
     private String buildSystemPrompt() {
-        return "你是远程面试中的实时答题助手。你必须输出结构化内容，帮助候选人在30秒内组织回答。\n"
-                + "输出要求:\n"
-                + "1) 提问意图: 一句话\n"
-                + "2) 回答要点: 3-5条，简洁\n"
-                + "3) 参考回答: 120-220字，口语化，第一人称\n"
-                + "4) 若用户简历能关联，请优先引用简历经历和项目细节";
+        return "你是远程面试中的实时答题助手。你的目标是生成候选人可以直接照着说的口语化回答。\n"
+                + "回答风格要求:\n"
+                + "1) 只输出最终回答，不要标题、不要编号、不要分点、不要解释你的思路。\n"
+                + "2) 使用第一人称，像真实候选人在面试中自然表达。\n"
+                + "3) 内容简洁，控制在80-180字之间，优先两到三小段。\n"
+                + "4) 如果问题适合结合简历，就自然带到相关项目或经历；不要生硬堆简历。\n"
+                + "5) 不要使用“首先、其次、最后”这种模板化表达，避免 AI 味。\n"
+                + "6) 如果问题很宽泛，直接给一个稳妥、可信、可落地的回答。";
     }
 
     private String buildUserPrompt(String transcript, String resumeText) {
@@ -97,20 +99,29 @@ public class BailianDeepSeekClient {
     }
 
     private InterviewAnalysis parseStructuredContent(String content) {
-        String intent = section(content, "提问意图");
-        String points = section(content, "回答要点");
-        String answer = section(content, "参考回答");
+        String answer = content == null ? "" : content.trim();
+        String structuredAnswer = section(answer, "参考回答");
+        if (!structuredAnswer.trim().isEmpty()) {
+            answer = structuredAnswer.trim();
+        }
+        answer = cleanupAnswer(answer);
+        return new InterviewAnalysis("", "", answer);
+    }
 
-        if (intent.trim().isEmpty()) {
-            intent = "请查看完整输出";
+    private String cleanupAnswer(String answer) {
+        String cleaned = answer == null ? "" : answer.trim();
+        String[] prefixes = {"参考回答：", "参考回答:", "回答：", "回答:", "最终回答：", "最终回答:"};
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (String prefix : prefixes) {
+                if (cleaned.startsWith(prefix)) {
+                    cleaned = cleaned.substring(prefix.length()).trim();
+                    changed = true;
+                }
+            }
         }
-        if (points.trim().isEmpty()) {
-            points = content;
-        }
-        if (answer.trim().isEmpty()) {
-            answer = content;
-        }
-        return new InterviewAnalysis(intent, points, answer);
+        return cleaned;
     }
 
     private String section(String text, String title) {
