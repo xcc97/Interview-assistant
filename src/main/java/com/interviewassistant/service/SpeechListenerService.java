@@ -4,11 +4,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.interviewassistant.service.audio.PcmAudioCaptureProvider;
 import com.interviewassistant.service.audio.SystemAudioCaptureProviderFactory;
-import org.vosk.Model;
-import org.vosk.Recognizer;
+import com.sun.jna.Function;
+import com.sun.jna.NativeLibrary;
+import com.sun.jna.Pointer;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -17,6 +20,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class SpeechListenerService {
     private static final float SAMPLE_RATE = 16000.0F;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final AtomicBoolean VOSK_NATIVE_READY = new AtomicBoolean(false);
+    private static NativeLibrary voskLibrary;
 
     public interface Callback {
         void onStatus(String text);
@@ -88,6 +93,7 @@ public class SpeechListenerService {
         System.out.println("[VOSK-DIAG] modelDir children=" + describeDirectory(modelDir));
         System.out.println("[AUDIO-CAPTURE] requestedMixer=" + mixerName);
         try {
+            ensureBundledVoskNativeLoaded(callback);
             File runtimeModelDir = prepareRuntimeModelDirectory(modelDir);
             File stagedModelDir = stageModelToAsciiPath(runtimeModelDir);
             callback.onStatus("模型目录已解析为: " + runtimeModelDir.getAbsolutePath());
@@ -100,8 +106,17 @@ public class SpeechListenerService {
             System.out.println("[VOSK-DIAG] runtimeModelDir children=" + describeDirectory(runtimeModelDir));
             callback.onStatus("准备初始化 VOSK Model...");
             System.out.println("[VOSK-DIAG] initializing Model with path=" + stagedModelDir.getAbsolutePath());
-            try (Model model = new Model(stagedModelDir.getAbsolutePath());
-                 Recognizer recognizer = new Recognizer(model, SAMPLE_RATE)) {
+            Pointer modelPointer = voskModelNew(stagedModelDir.getAbsolutePath());
+            if (modelPointer == null) {
+                throw new IOException("VOSK 模型初始化失败，native 返回空指针: " + stagedModelDir.getAbsolutePath());
+            }
+            Pointer recognizerPointer = null;
+            try {
+                recognizerPointer = voskRecognizerNew(modelPointer, SAMPLE_RATE);
+                if (recognizerPointer == null) {
+                    throw new IOException("VOSK 识别器初始化失败，native 返回空指针");
+                }
+                final Pointer finalRecognizerPointer = recognizerPointer;
                 captureProvider = SystemAudioCaptureProviderFactory.create();
                 callback.onStatus("音频采集方式: " + captureProvider.getName());
                 final long[] totalBytes = new long[]{0L};
@@ -135,14 +150,14 @@ public class SpeechListenerService {
                             lastLevelLog[0] = now;
                         }
 
-                        boolean sentenceFinished = recognizer.acceptWaveForm(pcm16le, length);
+                        boolean sentenceFinished = voskRecognizerAcceptWaveform(finalRecognizerPointer, pcm16le, length);
                         if (sentenceFinished) {
-                            String sentence = parseText(recognizer.getResult());
+                            String sentence = parseText(voskRecognizerResult(finalRecognizerPointer));
                             if (!sentence.trim().isEmpty()) {
                                 callback.onFinalSentence(sentence.trim());
                             }
                         } else {
-                            String partial = parsePartial(recognizer.getPartialResult());
+                            String partial = parsePartial(voskRecognizerPartialResult(finalRecognizerPointer));
                             if (!partial.trim().isEmpty()) {
                                 callback.onPartial(partial.trim());
                             }
@@ -150,16 +165,22 @@ public class SpeechListenerService {
                     }
                 });
 
-                String last = parseText(recognizer.getFinalResult());
+                String last = parseText(voskRecognizerFinalResult(finalRecognizerPointer));
                 if (!last.trim().isEmpty()) {
                     callback.onFinalSentence(last.trim());
                 }
                 callback.onStatus("监听已停止");
+            } finally {
+                if (recognizerPointer != null) {
+                    voskRecognizerFree(recognizerPointer);
+                }
+                voskModelFree(modelPointer);
             }
-        } catch (Exception ex) {
+        } catch (Throwable ex) {
             System.out.println("[VOSK-DIAG] failed: " + ex.getClass().getName() + ": " + ex.getMessage());
+            ex.printStackTrace();
             if (running.get()) {
-                callback.onError("语音监听失败: " + ex.getMessage());
+                callback.onError(buildFriendlyErrorMessage(ex));
             }
         } finally {
             running.set(false);
@@ -167,6 +188,125 @@ public class SpeechListenerService {
                 captureProvider.stop();
             }
         }
+    }
+
+    private String buildFriendlyErrorMessage(Throwable ex) {
+        String message = ex.getMessage() == null ? ex.getClass().getName() : ex.getMessage();
+        if (ex instanceof UnsatisfiedLinkError || ex instanceof LinkageError) {
+            return "VOSK 本地库加载失败: " + message + "\n\n"
+                    + "项目现在会优先加载依赖 jar 内自带的 native 库。\n"
+                    + "如果仍然报错，通常说明系统环境里还有旧版 libvosk 被优先加载，或者当前 JDK 架构与 native 库架构不一致。\n"
+                    + "请优先检查 DYLD_LIBRARY_PATH、java.library.path，以及机器是否为 Apple Silicon。";
+        }
+        return "语音监听失败: " + message;
+    }
+
+    private void ensureBundledVoskNativeLoaded(Callback callback) throws IOException {
+        if (VOSK_NATIVE_READY.get()) {
+            return;
+        }
+        synchronized (VOSK_NATIVE_READY) {
+            if (VOSK_NATIVE_READY.get()) {
+                return;
+            }
+            String resourcePath = resolveVoskNativeResourcePath();
+            Path extracted = extractBundledVoskNative(resourcePath);
+            callback.onStatus("正在加载 VOSK 本地库: " + extracted);
+            System.out.println("[VOSK-DIAG] extractedNative=" + extracted);
+            System.setProperty("jna.library.path", extracted.getParent().toString());
+            System.setProperty("org.vosk.lib.path", extracted.toString());
+            System.load(extracted.toAbsolutePath().toString());
+            voskLibrary = NativeLibrary.getInstance(extracted.toAbsolutePath().toString());
+            VOSK_NATIVE_READY.set(true);
+        }
+    }
+
+    private String resolveVoskNativeResourcePath() {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        if (os.contains("win")) {
+            return "win32-x86-64/libvosk.dll";
+        }
+        if (os.contains("mac")) {
+            return "darwin/libvosk.dylib";
+        }
+        return "linux-x86-64/libvosk.so";
+    }
+
+    private Pointer voskModelNew(String modelPath) {
+        return getVoskFunction("vosk_model_new").invokePointer(new Object[]{modelPath});
+    }
+
+    private void voskModelFree(Pointer modelPointer) {
+        getVoskFunction("vosk_model_free").invokeVoid(new Object[]{modelPointer});
+    }
+
+    private Pointer voskRecognizerNew(Pointer modelPointer, float sampleRate) {
+        return getVoskFunction("vosk_recognizer_new").invokePointer(new Object[]{modelPointer, sampleRate});
+    }
+
+    private boolean voskRecognizerAcceptWaveform(Pointer recognizerPointer, byte[] data, int length) {
+        Integer accepted = (Integer) getVoskFunction("vosk_recognizer_accept_waveform").invoke(Integer.class, new Object[]{recognizerPointer, data, length});
+        return accepted != null && accepted != 0;
+    }
+
+    private String voskRecognizerResult(Pointer recognizerPointer) {
+        return pointerToUtf8String(getVoskFunction("vosk_recognizer_result").invokePointer(new Object[]{recognizerPointer}));
+    }
+
+    private String voskRecognizerPartialResult(Pointer recognizerPointer) {
+        return pointerToUtf8String(getVoskFunction("vosk_recognizer_partial_result").invokePointer(new Object[]{recognizerPointer}));
+    }
+
+    private String voskRecognizerFinalResult(Pointer recognizerPointer) {
+        return pointerToUtf8String(getVoskFunction("vosk_recognizer_final_result").invokePointer(new Object[]{recognizerPointer}));
+    }
+
+    private void voskRecognizerFree(Pointer recognizerPointer) {
+        getVoskFunction("vosk_recognizer_free").invokeVoid(new Object[]{recognizerPointer});
+    }
+
+    private Function getVoskFunction(String name) {
+        if (voskLibrary == null) {
+            throw new IllegalStateException("VOSK native library has not been loaded");
+        }
+        return voskLibrary.getFunction(name);
+    }
+
+    private String pointerToUtf8String(Pointer pointer) {
+        if (pointer == null) {
+            return "";
+        }
+        return pointer.getString(0L, StandardCharsets.UTF_8.name());
+    }
+
+    private Path extractBundledVoskNative(String resourcePath) throws IOException {
+        String fileName = resourcePath.substring(resourcePath.lastIndexOf('/') + 1);
+        Path targetDir = Files.createDirectories(Path.of(System.getProperty("java.io.tmpdir"), "vosk-native", "0.3.45"));
+        Path targetFile = targetDir.resolve(fileName);
+
+        if (Files.exists(targetFile) && Files.size(targetFile) > 0L) {
+            return targetFile;
+        }
+
+        try (InputStream inputStream = openBundledResource(resourcePath)) {
+            if (inputStream == null) {
+                throw new IOException("应用 classpath 中缺少 VOSK native 资源: " + resourcePath);
+            }
+            Files.copy(inputStream, targetFile, StandardCopyOption.REPLACE_EXISTING);
+        }
+        targetFile.toFile().deleteOnExit();
+        return targetFile;
+    }
+
+    private InputStream openBundledResource(String resourcePath) {
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        if (classLoader != null) {
+            InputStream stream = classLoader.getResourceAsStream(resourcePath);
+            if (stream != null) {
+                return stream;
+            }
+        }
+        return SpeechListenerService.class.getClassLoader().getResourceAsStream(resourcePath);
     }
 
     private File resolveModelDirectory(String modelPath) {

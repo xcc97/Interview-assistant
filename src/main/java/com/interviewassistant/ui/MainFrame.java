@@ -156,6 +156,9 @@ public class MainFrame extends JFrame {
     private JButton createButton(String text, Color background, Color foreground) {
         JButton button = new JButton(text);
         button.setFocusPainted(false);
+        button.setOpaque(true);
+        button.setContentAreaFilled(true);
+        button.setBorderPainted(true);
         button.setBackground(background);
         button.setForeground(foreground);
         button.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 13));

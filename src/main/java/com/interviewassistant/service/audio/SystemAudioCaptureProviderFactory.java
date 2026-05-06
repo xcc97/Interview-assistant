@@ -7,40 +7,66 @@ import java.net.URL;
 public class SystemAudioCaptureProviderFactory {
     public static PcmAudioCaptureProvider create() {
         File helper = resolveNativeHelper();
-        if (helper == null || !helper.exists()) {
-            throw new IllegalStateException("未检测到内置系统音频采集组件: " + (helper == null ? "<unknown>" : helper.getAbsolutePath()));
+        if (isRunnableHelper(helper)) {
+            return new ExternalPcmProcessCaptureProvider(helper, buildHelperDisplayName(helper));
         }
-        return new ExternalPcmProcessCaptureProvider(helper, buildHelperDisplayName(helper));
+        return new JavaSoundMicrophoneCaptureProvider(resolveRequestedMixer());
     }
 
     public static boolean hasNativeHelper() {
-        File helper = resolveNativeHelper();
-        return helper != null && helper.exists();
+        return isRunnableHelper(resolveNativeHelper());
     }
 
     private static File resolveNativeHelper() {
         String os = System.getProperty("os.name", "").toLowerCase();
-        String helperName;
         if (os.contains("win")) {
-            helperName = "native/windows/wasapi-loopback-capture.exe";
-        } else if (os.contains("mac")) {
-            helperName = "native/macos/system-audio-capture";
-        } else {
-            helperName = "native/linux/system-audio-capture";
+            return resolveWindowsHelper();
         }
+        if (os.contains("mac")) {
+            return resolveMacHelper();
+        }
+        return resolveLinuxHelper();
+    }
 
+    private static File resolveWindowsHelper() {
+        return findExistingFile(
+                "native/windows/wasapi-loopback-capture.exe",
+                "native/windows/wasapi-loopback-capture/build/Release/wasapi-loopback-capture.exe",
+                "native/windows/wasapi-loopback-capture/build/wasapi-loopback-capture.exe"
+        );
+    }
+
+    private static File resolveMacHelper() {
+        return findExistingFile(
+                "native/macos/system-audio-capture",
+                "native/macos/system-audio-capture/.build/release/system-audio-capture"
+        );
+    }
+
+    private static File resolveLinuxHelper() {
+        return findExistingFile(
+                "native/linux/system-audio-capture"
+        );
+    }
+
+    private static File findExistingFile(String... candidates) {
         File base = getApplicationBaseDirectory();
-        File direct = new File(base, helperName);
-        if (direct.exists()) {
-            return direct;
+        File workingDir = new File(System.getProperty("user.dir", "."));
+        for (int i = 0; i < candidates.length; i++) {
+            File fromBase = new File(base, candidates[i]);
+            if (isRunnableHelper(fromBase)) {
+                return fromBase;
+            }
+            File fromWorkingDir = new File(workingDir, candidates[i]);
+            if (isRunnableHelper(fromWorkingDir)) {
+                return fromWorkingDir;
+            }
         }
+        return new File(workingDir, candidates[0]);
+    }
 
-        File fromWorkingDir = new File(System.getProperty("user.dir", "."), helperName);
-        if (fromWorkingDir.exists()) {
-            return fromWorkingDir;
-        }
-
-        return direct;
+    private static boolean isRunnableHelper(File helper) {
+        return helper != null && helper.exists() && helper.isFile();
     }
 
     private static String buildHelperDisplayName(File helper) {
@@ -52,6 +78,14 @@ public class SystemAudioCaptureProviderFactory {
             return "macOS ScreenCaptureKit System Audio";
         }
         return helper.getName();
+    }
+
+    private static String resolveRequestedMixer() {
+        String mixer = System.getProperty("interviewassistant.audio.mixer", "");
+        if (mixer == null || mixer.trim().isEmpty()) {
+            mixer = System.getenv("INTERVIEW_ASSISTANT_AUDIO_MIXER");
+        }
+        return mixer == null ? "" : mixer.trim();
     }
 
     private static File getApplicationBaseDirectory() {

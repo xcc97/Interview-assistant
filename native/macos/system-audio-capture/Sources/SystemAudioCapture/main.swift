@@ -41,6 +41,7 @@ struct Arguments {
 final class PcmResampler {
     private let outputFormat: AVAudioFormat
     private var converter: AVAudioConverter?
+    private var droppedSamples = 0
 
     init(sampleRate: Double, channels: AVAudioChannelCount) {
         outputFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
@@ -50,61 +51,111 @@ final class PcmResampler {
     }
 
     func convert(sampleBuffer: CMSampleBuffer) -> Data? {
-        guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer),
-              let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
-              let streamDescriptionPointer = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) else {
+        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let streamDescriptionPointer = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription),
+              let inputFormat = AVAudioFormat(streamDescription: streamDescriptionPointer) else {
+            logDrop("missing audio format description")
             return nil
         }
 
-        var lengthAtOffset = 0
-        var totalLength = 0
-        var dataPointer: UnsafeMutablePointer<Int8>?
-        let status = CMBlockBufferGetDataPointer(blockBuffer,
-                                                 atOffset: 0,
-                                                 lengthAtOffsetOut: &lengthAtOffset,
-                                                 totalLengthOut: &totalLength,
-                                                 dataPointerOut: &dataPointer)
-        guard status == kCMBlockBufferNoErr, let dataPointer else {
-            return nil
-        }
-
-        let inputASBD = streamDescriptionPointer.pointee
-        guard let inputFormat = AVAudioFormat(streamDescription: streamDescriptionPointer) else {
+        let frameCount = AVAudioFrameCount(CMSampleBufferGetNumSamples(sampleBuffer))
+        guard frameCount > 0 else {
+            logDrop("empty sample buffer")
             return nil
         }
 
         if converter == nil || converter?.inputFormat != inputFormat {
             converter = AVAudioConverter(from: inputFormat, to: outputFormat)
+            StderrLogger.info("input format sampleRate=\(inputFormat.sampleRate) channels=\(inputFormat.channelCount) interleaved=\(inputFormat.isInterleaved) commonFormat=\(inputFormat.commonFormat.rawValue)")
         }
         guard let converter else {
-            return nil
-        }
-
-        let bytesPerFrame = Int(max(inputASBD.mBytesPerFrame, 1))
-        let frameCount = AVAudioFrameCount(totalLength / bytesPerFrame)
-        guard frameCount > 0 else {
+            logDrop("failed to create audio converter")
             return nil
         }
 
         guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: inputFormat, frameCapacity: frameCount) else {
+            logDrop("failed to allocate input buffer")
             return nil
         }
         inputBuffer.frameLength = frameCount
 
+        var bufferListSizeNeeded = 0
+        var sizeStatus = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer,
+                                                                                bufferListSizeNeededOut: &bufferListSizeNeeded,
+                                                                                bufferListOut: nil,
+                                                                                bufferListSize: 0,
+                                                                                blockBufferAllocator: nil,
+                                                                                blockBufferMemoryAllocator: nil,
+                                                                                flags: 0,
+                                                                                blockBufferOut: nil)
+        if sizeStatus != noErr && bufferListSizeNeeded <= 0 {
+            logDrop("failed to query audio buffer list size status=\(sizeStatus)")
+            return nil
+        }
+        if bufferListSizeNeeded <= 0 {
+            bufferListSizeNeeded = MemoryLayout<AudioBufferList>.size + MemoryLayout<AudioBuffer>.size * Int(max(inputFormat.channelCount, 1) - 1)
+        }
+
+        let rawBufferList = UnsafeMutableRawPointer.allocate(byteCount: bufferListSizeNeeded,
+                                                            alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer {
+            rawBufferList.deallocate()
+        }
+        let audioBufferList = rawBufferList.bindMemory(to: AudioBufferList.self, capacity: 1)
+
+        var blockBuffer: CMBlockBuffer?
+        let flags = UInt32(kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment)
+        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer,
+                                                                             bufferListSizeNeededOut: nil,
+                                                                             bufferListOut: audioBufferList,
+                                                                             bufferListSize: bufferListSizeNeeded,
+                                                                             blockBufferAllocator: kCFAllocatorDefault,
+                                                                             blockBufferMemoryAllocator: kCFAllocatorDefault,
+                                                                             flags: flags,
+                                                                             blockBufferOut: &blockBuffer)
+        guard status == noErr else {
+            logDrop("CMSampleBufferGetAudioBufferList failed status=\(status) size=\(bufferListSizeNeeded) queryStatus=\(sizeStatus)")
+            return nil
+        }
+
+        let sourceBuffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+        let targetBuffers = UnsafeMutableAudioBufferListPointer(inputBuffer.mutableAudioBufferList)
+        guard sourceBuffers.count > 0, targetBuffers.count > 0 else {
+            logDrop("audio buffer list is empty")
+            return nil
+        }
+
         if inputFormat.isInterleaved {
-            guard let dst = inputBuffer.audioBufferList.pointee.mBuffers.mData else {
+            guard let src = sourceBuffers[0].mData,
+                  let dst = targetBuffers[0].mData else {
+                logDrop("interleaved buffer data is nil")
                 return nil
             }
-            memcpy(dst, dataPointer, totalLength)
-            inputBuffer.audioBufferList.pointee.mBuffers.mDataByteSize = UInt32(totalLength)
+            let byteCount = Int(sourceBuffers[0].mDataByteSize)
+            memcpy(dst, src, byteCount)
+            targetBuffers[0].mDataByteSize = sourceBuffers[0].mDataByteSize
         } else {
-            // ScreenCaptureKit normally supplies interleaved audio. If not, skip safely.
-            return nil
+            let copyCount = min(sourceBuffers.count, targetBuffers.count)
+            if copyCount == 0 {
+                logDrop("non-interleaved buffer data is empty")
+                return nil
+            }
+            for index in 0..<copyCount {
+                guard let src = sourceBuffers[index].mData,
+                      let dst = targetBuffers[index].mData else {
+                    logDrop("non-interleaved channel \(index) data is nil")
+                    return nil
+                }
+                let byteCount = Int(sourceBuffers[index].mDataByteSize)
+                memcpy(dst, src, byteCount)
+                targetBuffers[index].mDataByteSize = sourceBuffers[index].mDataByteSize
+            }
         }
 
         let ratio = outputFormat.sampleRate / inputFormat.sampleRate
         let outputCapacity = AVAudioFrameCount(Double(frameCount) * ratio + 1024)
         guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: outputCapacity) else {
+            logDrop("failed to allocate output buffer")
             return nil
         }
 
@@ -120,16 +171,31 @@ final class PcmResampler {
             return inputBuffer
         }
 
-        converter.convert(to: outputBuffer, error: &conversionError, withInputFrom: inputBlock)
-        if conversionError != nil || outputBuffer.frameLength == 0 {
+        let conversionStatus = converter.convert(to: outputBuffer, error: &conversionError, withInputFrom: inputBlock)
+        if let conversionError {
+            logDrop("converter error: \(conversionError.localizedDescription)")
+            return nil
+        }
+        if outputBuffer.frameLength == 0 {
+            logDrop("converter returned zero frames status=\(conversionStatus.rawValue)")
             return nil
         }
 
         let bytes = Int(outputBuffer.frameLength) * Int(outputFormat.streamDescription.pointee.mBytesPerFrame)
-        guard let outData = outputBuffer.audioBufferList.pointee.mBuffers.mData else {
+        let outputBuffers = UnsafeMutableAudioBufferListPointer(outputBuffer.mutableAudioBufferList)
+        guard outputBuffers.count > 0,
+              let outData = outputBuffers[0].mData else {
+            logDrop("output buffer data is nil")
             return nil
         }
         return Data(bytes: outData, count: bytes)
+    }
+
+    private func logDrop(_ message: String) {
+        droppedSamples += 1
+        if droppedSamples <= 5 || droppedSamples % 50 == 0 {
+            StderrLogger.info("dropping audio sample: \(message)")
+        }
     }
 }
 
@@ -138,6 +204,7 @@ final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     private let resampler = PcmResampler(sampleRate: 16000, channels: 1)
     private var stream: SCStream?
     private let output = FileHandle.standardOutput
+    private var audioSampleCount = 0
 
     func start() async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
@@ -177,6 +244,10 @@ final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
         guard outputType == .audio, sampleBuffer.isValid else {
             return
+        }
+        audioSampleCount += 1
+        if audioSampleCount <= 3 || audioSampleCount % 200 == 0 {
+            StderrLogger.info("received audio sample #\(audioSampleCount), numSamples=\(CMSampleBufferGetNumSamples(sampleBuffer))")
         }
         guard let pcm = resampler.convert(sampleBuffer: sampleBuffer), !pcm.isEmpty else {
             return
