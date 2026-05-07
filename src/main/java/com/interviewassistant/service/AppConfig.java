@@ -2,9 +2,6 @@ package com.interviewassistant.service;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.File;
-import java.net.URISyntaxException;
-import java.net.URL;
 import java.util.Properties;
 
 public class AppConfig {
@@ -42,72 +39,58 @@ public class AppConfig {
         return model.isEmpty() ? DEFAULT_MODEL : model;
     }
 
-    public String getVoskModelPath() {
-        String fromEnv = System.getenv("VOSK_MODEL_PATH");
-        String rawPath;
+    public String getAliyunAsrAppKey() {
+        String fromEnv = System.getenv("ALIYUN_ASR_APP_KEY");
         if (fromEnv != null && !fromEnv.trim().isEmpty()) {
-            rawPath = fromEnv.trim();
-        } else {
-            rawPath = properties.getProperty("asr.voskModelPath", "").trim();
+            return fromEnv.trim();
         }
-        return resolvePath(rawPath);
+        return properties.getProperty("asr.aliyun.appKey", "").trim();
     }
 
-    private String resolvePath(String rawPath) {
-        if (rawPath == null || rawPath.trim().isEmpty()) {
-            return "";
+    public String getAliyunAsrAccessKeyId() {
+        String fromEnv = System.getenv("ALIYUN_ACCESS_KEY_ID");
+        if (fromEnv == null || fromEnv.trim().isEmpty()) {
+            fromEnv = System.getenv("ALIYUN_ASR_ACCESS_KEY_ID");
         }
-
-        File[] candidates = new File[]{
-                new File(rawPath),
-                new File(System.getProperty("user.dir", "."), rawPath),
-                new File(getJarDirectory(), rawPath)
-        };
-
-        for (int i = 0; i < candidates.length; i++) {
-            File candidate = canonicalize(candidates[i]);
-            if (candidate.exists()) {
-                return candidate.getAbsolutePath();
-            }
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
         }
-
-        String resourcePath = rawPath.replace('\\', '/');
-        URL resourceUrl = AppConfig.class.getClassLoader().getResource(resourcePath);
-        if (resourceUrl != null) {
-            try {
-                return canonicalize(new File(resourceUrl.toURI())).getAbsolutePath();
-            } catch (Exception ignored) {
-                return canonicalize(new File(resourceUrl.getPath())).getAbsolutePath();
-            }
+        String value = properties.getProperty("asr.aliyun.accessKeyId", "").trim();
+        if (value.isEmpty()) {
+            value = properties.getProperty("aliyun.accessKeyId", "").trim();
         }
-
-        return canonicalize(new File(rawPath)).getAbsolutePath();
+        return value;
     }
 
-    private File getJarDirectory() {
-        try {
-            URL location = AppConfig.class.getProtectionDomain().getCodeSource().getLocation();
-            if (location != null) {
-                File base = new File(location.toURI());
-                if (base.isFile()) {
-                    File parent = base.getParentFile();
-                    if (parent != null) {
-                        return parent;
-                    }
-                }
-                return base;
-            }
-        } catch (URISyntaxException ignored) {
+    public String getAliyunAsrAccessKeySecret() {
+        String fromEnv = System.getenv("ALIYUN_ACCESS_KEY_SECRET");
+        if (fromEnv == null || fromEnv.trim().isEmpty()) {
+            fromEnv = System.getenv("ALIYUN_ASR_ACCESS_KEY_SECRET");
         }
-        return new File(System.getProperty("user.dir", "."));
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
+        }
+        String value = properties.getProperty("asr.aliyun.accessKeySecret", "").trim();
+        if (value.isEmpty()) {
+            value = properties.getProperty("aliyun.accessKeySecret", "").trim();
+        }
+        return value;
     }
 
-    private File canonicalize(File file) {
-        try {
-            return file.getCanonicalFile();
-        } catch (IOException ignored) {
-            return file.getAbsoluteFile();
+    public String getAliyunAsrToken() {
+        String fromEnv = System.getenv("ALIYUN_ASR_TOKEN");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
         }
+        return properties.getProperty("asr.aliyun.token", "").trim();
+    }
+
+    public String getAliyunAsrEndpoint() {
+        String fromEnv = System.getenv("ALIYUN_ASR_ENDPOINT");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
+        }
+        return properties.getProperty("asr.aliyun.endpoint", "").trim();
     }
 
     public int getMinAutoAnalyzeLength() {
@@ -135,9 +118,12 @@ public class AppConfig {
         sb.append("os.arch = ").append(System.getProperty("os.arch", "")).append('\n');
         sb.append("java.version = ").append(System.getProperty("java.version", "")).append('\n');
         sb.append("user.dir = ").append(System.getProperty("user.dir", "")).append('\n');
-        sb.append("app.config.model = ").append(properties.getProperty("asr.voskModelPath", "")).append('\n');
-        sb.append("env.VOSK_MODEL_PATH = ").append(safeEnv("VOSK_MODEL_PATH")).append('\n');
-        sb.append("resolved.voskModelPath = ").append(getVoskModelPath()).append('\n');
+        sb.append("app.config.aliyunAppKey = ").append(mask(getAliyunAsrAppKey())).append('\n');
+        sb.append("env.ALIYUN_ASR_APP_KEY = ").append(mask(safeEnv("ALIYUN_ASR_APP_KEY"))).append('\n');
+        sb.append("resolved.aliyunAccessKeyId = ").append(mask(getAliyunAsrAccessKeyId())).append('\n');
+        sb.append("env.ALIYUN_ACCESS_KEY_ID = ").append(mask(safeEnv("ALIYUN_ACCESS_KEY_ID"))).append('\n');
+        sb.append("resolved.aliyunToken = ").append(mask(getAliyunAsrToken())).append('\n');
+        sb.append("resolved.aliyunEndpoint = ").append(getAliyunAsrEndpoint()).append('\n');
         sb.append("resolved.asrMixerName = ").append(getAsrMixerName()).append('\n');
         return sb.toString();
     }
@@ -145,5 +131,16 @@ public class AppConfig {
     private String safeEnv(String name) {
         String value = System.getenv(name);
         return value == null ? "" : value.trim();
+    }
+
+    private String mask(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return "";
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() <= 8) {
+            return "****";
+        }
+        return trimmed.substring(0, 4) + "****" + trimmed.substring(trimmed.length() - 4);
     }
 }

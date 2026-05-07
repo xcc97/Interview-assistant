@@ -1,27 +1,20 @@
 package com.interviewassistant.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.alibaba.nls.client.AccessToken;
+import com.alibaba.nls.client.protocol.InputFormatEnum;
+import com.alibaba.nls.client.protocol.NlsClient;
+import com.alibaba.nls.client.protocol.SampleRateEnum;
+import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
+import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
+import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 import com.interviewassistant.service.audio.PcmAudioCaptureProvider;
 import com.interviewassistant.service.audio.SystemAudioCaptureProviderFactory;
-import com.sun.jna.Function;
-import com.sun.jna.NativeLibrary;
-import com.sun.jna.Pointer;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SpeechListenerService {
-    private static final float SAMPLE_RATE = 16000.0F;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final AtomicBoolean VOSK_NATIVE_READY = new AtomicBoolean(false);
-    private static NativeLibrary voskLibrary;
+    private static final String DEFAULT_NLS_ENDPOINT = "wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1";
 
     public interface Callback {
         void onStatus(String text);
@@ -37,6 +30,8 @@ public class SpeechListenerService {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private Thread worker;
     private PcmAudioCaptureProvider captureProvider;
+    private volatile SpeechTranscriber transcriber;
+    private volatile NlsClient nlsClient;
 
     public SpeechListenerService(AppConfig config) {
         this.config = config;
@@ -55,23 +50,21 @@ public class SpeechListenerService {
             callback.onStatus("监听已在运行");
             return;
         }
-        String modelPath = config.getVoskModelPath();
-        if (modelPath.isEmpty()) {
-            callback.onError("未配置 VOSK 模型路径，请设置 VOSK_MODEL_PATH 或 application.properties 里的 asr.voskModelPath");
+        if (config.getAliyunAsrAppKey().isEmpty()) {
+            callback.onError("未配置阿里云语音识别 AppKey，请设置 ALIYUN_ASR_APP_KEY 或 application.properties 里的 asr.aliyun.appKey");
             return;
         }
-        File modelDir = resolveModelDirectory(modelPath);
-        if (modelDir == null) {
-            callback.onError("VOSK 模型目录不存在或不完整: " + modelPath + "。请确保你指向的是解压后的模型根目录，而不是压缩包路径，也不是项目根目录。");
+        if (config.getAliyunAsrToken().isEmpty()
+                && (config.getAliyunAsrAccessKeyId().isEmpty() || config.getAliyunAsrAccessKeySecret().isEmpty())) {
+            callback.onError("未配置阿里云 AccessKey，请设置 ALIYUN_ACCESS_KEY_ID / ALIYUN_ACCESS_KEY_SECRET，或 application.properties 里的 asr.aliyun.accessKeyId / asr.aliyun.accessKeySecret。也可以临时设置 asr.aliyun.token 兜底。");
             return;
         }
-        callback.onStatus("模型目录已解析为: " + modelDir.getAbsolutePath());
 
         running.set(true);
         worker = new Thread(new Runnable() {
             @Override
             public void run() {
-                doListen(modelDir, callback, mixerName);
+                doListen(callback, mixerName);
             }
         }, "speech-listener");
         worker.setDaemon(true);
@@ -80,104 +73,82 @@ public class SpeechListenerService {
 
     public void stop() {
         running.set(false);
+        SpeechTranscriber currentTranscriber = transcriber;
+        if (currentTranscriber != null) {
+            try {
+                currentTranscriber.stop();
+            } catch (Exception ignored) {
+            }
+            currentTranscriber.close();
+        }
         if (captureProvider != null) {
             captureProvider.stop();
         }
+        NlsClient currentClient = nlsClient;
+        if (currentClient != null) {
+            currentClient.shutdown();
+        }
     }
 
-    private void doListen(File modelDir, Callback callback, String mixerName) {
-        callback.onStatus("正在加载语音模型...");
-        System.out.println("[VOSK-DIAG] user.dir=" + System.getProperty("user.dir", ""));
-        System.out.println("[VOSK-DIAG] os.name=" + System.getProperty("os.name", ""));
-        System.out.println("[VOSK-DIAG] modelDir=" + modelDir.getAbsolutePath());
-        System.out.println("[VOSK-DIAG] modelDir children=" + describeDirectory(modelDir));
+    private void doListen(Callback callback, String mixerName) {
+        callback.onStatus("正在连接阿里云语音识别...");
+        System.out.println("[ASR-DIAG] user.dir=" + System.getProperty("user.dir", ""));
+        System.out.println("[ASR-DIAG] os.name=" + System.getProperty("os.name", ""));
         System.out.println("[AUDIO-CAPTURE] requestedMixer=" + mixerName);
         try {
-            ensureBundledVoskNativeLoaded(callback);
-            File runtimeModelDir = prepareRuntimeModelDirectory(modelDir);
-            File stagedModelDir = stageModelToAsciiPath(runtimeModelDir);
-            callback.onStatus("模型目录已解析为: " + runtimeModelDir.getAbsolutePath());
-            callback.onStatus("模型目录内容: " + describeDirectory(runtimeModelDir));
-            if (!runtimeModelDir.getAbsolutePath().equals(stagedModelDir.getAbsolutePath())) {
-                callback.onStatus("模型已复制到兼容路径: " + stagedModelDir.getAbsolutePath());
-            }
-            System.out.println("[VOSK-DIAG] runtimeModelDir=" + runtimeModelDir.getAbsolutePath());
-            System.out.println("[VOSK-DIAG] stagedModelDir=" + stagedModelDir.getAbsolutePath());
-            System.out.println("[VOSK-DIAG] runtimeModelDir children=" + describeDirectory(runtimeModelDir));
-            callback.onStatus("准备初始化 VOSK Model...");
-            System.out.println("[VOSK-DIAG] initializing Model with path=" + stagedModelDir.getAbsolutePath());
-            Pointer modelPointer = voskModelNew(stagedModelDir.getAbsolutePath());
-            if (modelPointer == null) {
-                throw new IOException("VOSK 模型初始化失败，native 返回空指针: " + stagedModelDir.getAbsolutePath());
-            }
-            Pointer recognizerPointer = null;
-            try {
-                recognizerPointer = voskRecognizerNew(modelPointer, SAMPLE_RATE);
-                if (recognizerPointer == null) {
-                    throw new IOException("VOSK 识别器初始化失败，native 返回空指针");
+            String endpoint = config.getAliyunAsrEndpoint();
+            String token = resolveAliyunAsrToken(callback);
+            nlsClient = new NlsClient(endpoint.isEmpty() ? DEFAULT_NLS_ENDPOINT : endpoint, token);
+            transcriber = new SpeechTranscriber(nlsClient, buildListener(callback));
+            transcriber.setAppKey(config.getAliyunAsrAppKey());
+            transcriber.setFormat(InputFormatEnum.PCM);
+            transcriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+            transcriber.setEnableIntermediateResult(true);
+            transcriber.setEnablePunctuation(true);
+            transcriber.setEnableITN(true);
+            transcriber.start();
+
+            captureProvider = SystemAudioCaptureProviderFactory.create();
+            callback.onStatus("音频采集方式: " + captureProvider.getName());
+            final long[] totalBytes = new long[]{0L};
+            final long[] lastLevelLog = new long[]{System.currentTimeMillis()};
+            final long[] quietStartedAt = new long[]{lastLevelLog[0]};
+
+            captureProvider.start(new PcmAudioCaptureProvider.Listener() {
+                @Override
+                public void onStatus(String text) {
+                    callback.onStatus(text);
                 }
-                final Pointer finalRecognizerPointer = recognizerPointer;
-                captureProvider = SystemAudioCaptureProviderFactory.create();
-                callback.onStatus("音频采集方式: " + captureProvider.getName());
-                final long[] totalBytes = new long[]{0L};
-                final long[] lastLevelLog = new long[]{System.currentTimeMillis()};
-                final long[] quietStartedAt = new long[]{lastLevelLog[0]};
 
-                captureProvider.start(new PcmAudioCaptureProvider.Listener() {
-                    @Override
-                    public void onStatus(String text) {
-                        callback.onStatus(text);
+                @Override
+                public void onFrame(byte[] pcm16le, int length) throws IOException {
+                    if (!running.get() || transcriber == null) {
+                        return;
                     }
-
-                    @Override
-                    public void onFrame(byte[] pcm16le, int length) throws IOException {
-                        if (!running.get()) {
-                            return;
-                        }
-                        totalBytes[0] += length;
-                        double rms = calculatePcm16LeRms(pcm16le, length);
-                        long now = System.currentTimeMillis();
-                        if (rms > 50.0D) {
-                            quietStartedAt[0] = now;
-                        }
-                        if (now - lastLevelLog[0] >= 1000L) {
-                            System.out.println("[AUDIO-CAPTURE] provider=" + captureProvider.getName()
-                                    + ", bytes=" + totalBytes[0]
-                                    + ", rms=" + String.format(java.util.Locale.US, "%.2f", rms));
-                            if (now - quietStartedAt[0] > 5000L) {
-                                callback.onStatus("监听中，但当前系统音频几乎是静音；请确认会议正在播放声音");
-                            }
-                            lastLevelLog[0] = now;
-                        }
-
-                        boolean sentenceFinished = voskRecognizerAcceptWaveform(finalRecognizerPointer, pcm16le, length);
-                        if (sentenceFinished) {
-                            String sentence = parseText(voskRecognizerResult(finalRecognizerPointer));
-                            if (!sentence.trim().isEmpty()) {
-                                callback.onFinalSentence(sentence.trim());
-                            }
-                        } else {
-                            String partial = parsePartial(voskRecognizerPartialResult(finalRecognizerPointer));
-                            if (!partial.trim().isEmpty()) {
-                                callback.onPartial(partial.trim());
-                            }
-                        }
+                    totalBytes[0] += length;
+                    double rms = calculatePcm16LeRms(pcm16le, length);
+                    long now = System.currentTimeMillis();
+                    if (rms > 50.0D) {
+                        quietStartedAt[0] = now;
                     }
-                });
-
-                String last = parseText(voskRecognizerFinalResult(finalRecognizerPointer));
-                if (!last.trim().isEmpty()) {
-                    callback.onFinalSentence(last.trim());
+                    if (now - lastLevelLog[0] >= 1000L) {
+                        System.out.println("[AUDIO-CAPTURE] provider=" + captureProvider.getName()
+                                + ", bytes=" + totalBytes[0]
+                                + ", rms=" + String.format(java.util.Locale.US, "%.2f", rms));
+                        if (now - quietStartedAt[0] > 5000L) {
+                            callback.onStatus("监听中，但当前系统音频几乎是静音；请确认会议正在播放声音");
+                        }
+                        lastLevelLog[0] = now;
+                    }
+                    transcriber.send(pcm16le, length);
                 }
+            });
+
+            if (running.get()) {
                 callback.onStatus("监听已停止");
-            } finally {
-                if (recognizerPointer != null) {
-                    voskRecognizerFree(recognizerPointer);
-                }
-                voskModelFree(modelPointer);
             }
         } catch (Throwable ex) {
-            System.out.println("[VOSK-DIAG] failed: " + ex.getClass().getName() + ": " + ex.getMessage());
+            System.out.println("[ASR-DIAG] failed: " + ex.getClass().getName() + ": " + ex.getMessage());
             ex.printStackTrace();
             if (running.get()) {
                 callback.onError(buildFriendlyErrorMessage(ex));
@@ -187,254 +158,91 @@ public class SpeechListenerService {
             if (captureProvider != null) {
                 captureProvider.stop();
             }
+            if (transcriber != null) {
+                transcriber.close();
+                transcriber = null;
+            }
+            if (nlsClient != null) {
+                nlsClient.shutdown();
+                nlsClient = null;
+            }
         }
+    }
+
+    private String resolveAliyunAsrToken(Callback callback) throws IOException {
+        String accessKeyId = config.getAliyunAsrAccessKeyId();
+        String accessKeySecret = config.getAliyunAsrAccessKeySecret();
+        if (!accessKeyId.isEmpty() && !accessKeySecret.isEmpty()) {
+            callback.onStatus("正在使用 AccessKey 获取阿里云 NLS Token...");
+            AccessToken accessToken = new AccessToken(accessKeyId, accessKeySecret);
+            accessToken.apply();
+            String token = accessToken.getToken();
+            if (token == null || token.trim().isEmpty()) {
+                throw new IOException("阿里云 NLS Token 获取失败，返回为空");
+            }
+            callback.onStatus("阿里云 NLS Token 获取成功，有效期至: " + accessToken.getExpireTime());
+            return token.trim();
+        }
+
+        String configuredToken = config.getAliyunAsrToken();
+        if (!configuredToken.isEmpty()) {
+            callback.onStatus("未配置 AccessKey，使用已配置的阿里云 NLS Token");
+            return configuredToken;
+        }
+
+        throw new IOException("未配置阿里云 AccessKey 或 NLS Token");
+    }
+
+    private SpeechTranscriberListener buildListener(Callback callback) {
+        return new SpeechTranscriberListener() {
+            @Override
+            public void onTranscriberStart(SpeechTranscriberResponse response) {
+                callback.onStatus("阿里云语音识别已连接，开始监听");
+            }
+
+            @Override
+            public void onSentenceBegin(SpeechTranscriberResponse response) {
+                callback.onStatus("监听中...");
+            }
+
+            @Override
+            public void onSentenceEnd(SpeechTranscriberResponse response) {
+                String text = safeText(response);
+                if (!text.isEmpty()) {
+                    callback.onFinalSentence(text);
+                }
+            }
+
+            @Override
+            public void onTranscriptionResultChange(SpeechTranscriberResponse response) {
+                String text = safeText(response);
+                if (!text.isEmpty()) {
+                    callback.onPartial(text);
+                }
+            }
+
+            @Override
+            public void onTranscriptionComplete(SpeechTranscriberResponse response) {
+                callback.onStatus("监听已停止");
+            }
+
+            @Override
+            public void onFail(SpeechTranscriberResponse response) {
+                callback.onError("阿里云语音识别失败: " + safeText(response));
+            }
+        };
+    }
+
+    private String safeText(SpeechTranscriberResponse response) {
+        if (response == null || response.getTransSentenceText() == null) {
+            return "";
+        }
+        return response.getTransSentenceText().trim();
     }
 
     private String buildFriendlyErrorMessage(Throwable ex) {
         String message = ex.getMessage() == null ? ex.getClass().getName() : ex.getMessage();
-        if (ex instanceof UnsatisfiedLinkError || ex instanceof LinkageError) {
-            return "VOSK 本地库加载失败: " + message + "\n\n"
-                    + "项目现在会优先加载依赖 jar 内自带的 native 库。\n"
-                    + "如果仍然报错，通常说明系统环境里还有旧版 libvosk 被优先加载，或者当前 JDK 架构与 native 库架构不一致。\n"
-                    + "请优先检查 DYLD_LIBRARY_PATH、java.library.path，以及机器是否为 Apple Silicon。";
-        }
-        return "语音监听失败: " + message;
-    }
-
-    private void ensureBundledVoskNativeLoaded(Callback callback) throws IOException {
-        if (VOSK_NATIVE_READY.get()) {
-            return;
-        }
-        synchronized (VOSK_NATIVE_READY) {
-            if (VOSK_NATIVE_READY.get()) {
-                return;
-            }
-            String resourcePath = resolveVoskNativeResourcePath();
-            Path extracted = extractBundledVoskNative(resourcePath);
-            callback.onStatus("正在加载 VOSK 本地库: " + extracted);
-            System.out.println("[VOSK-DIAG] extractedNative=" + extracted);
-            System.setProperty("jna.library.path", extracted.getParent().toString());
-            System.setProperty("org.vosk.lib.path", extracted.toString());
-            System.load(extracted.toAbsolutePath().toString());
-            voskLibrary = NativeLibrary.getInstance(extracted.toAbsolutePath().toString());
-            VOSK_NATIVE_READY.set(true);
-        }
-    }
-
-    private String resolveVoskNativeResourcePath() {
-        String os = System.getProperty("os.name", "").toLowerCase();
-        if (os.contains("win")) {
-            return "win32-x86-64/libvosk.dll";
-        }
-        if (os.contains("mac")) {
-            return "darwin/libvosk.dylib";
-        }
-        return "linux-x86-64/libvosk.so";
-    }
-
-    private Pointer voskModelNew(String modelPath) {
-        return getVoskFunction("vosk_model_new").invokePointer(new Object[]{modelPath});
-    }
-
-    private void voskModelFree(Pointer modelPointer) {
-        getVoskFunction("vosk_model_free").invokeVoid(new Object[]{modelPointer});
-    }
-
-    private Pointer voskRecognizerNew(Pointer modelPointer, float sampleRate) {
-        return getVoskFunction("vosk_recognizer_new").invokePointer(new Object[]{modelPointer, sampleRate});
-    }
-
-    private boolean voskRecognizerAcceptWaveform(Pointer recognizerPointer, byte[] data, int length) {
-        Integer accepted = (Integer) getVoskFunction("vosk_recognizer_accept_waveform").invoke(Integer.class, new Object[]{recognizerPointer, data, length});
-        return accepted != null && accepted != 0;
-    }
-
-    private String voskRecognizerResult(Pointer recognizerPointer) {
-        return pointerToUtf8String(getVoskFunction("vosk_recognizer_result").invokePointer(new Object[]{recognizerPointer}));
-    }
-
-    private String voskRecognizerPartialResult(Pointer recognizerPointer) {
-        return pointerToUtf8String(getVoskFunction("vosk_recognizer_partial_result").invokePointer(new Object[]{recognizerPointer}));
-    }
-
-    private String voskRecognizerFinalResult(Pointer recognizerPointer) {
-        return pointerToUtf8String(getVoskFunction("vosk_recognizer_final_result").invokePointer(new Object[]{recognizerPointer}));
-    }
-
-    private void voskRecognizerFree(Pointer recognizerPointer) {
-        getVoskFunction("vosk_recognizer_free").invokeVoid(new Object[]{recognizerPointer});
-    }
-
-    private Function getVoskFunction(String name) {
-        if (voskLibrary == null) {
-            throw new IllegalStateException("VOSK native library has not been loaded");
-        }
-        return voskLibrary.getFunction(name);
-    }
-
-    private String pointerToUtf8String(Pointer pointer) {
-        if (pointer == null) {
-            return "";
-        }
-        return pointer.getString(0L, StandardCharsets.UTF_8.name());
-    }
-
-    private Path extractBundledVoskNative(String resourcePath) throws IOException {
-        String fileName = resourcePath.substring(resourcePath.lastIndexOf('/') + 1);
-        Path targetDir = Files.createDirectories(Path.of(System.getProperty("java.io.tmpdir"), "vosk-native", "0.3.45"));
-        Path targetFile = targetDir.resolve(fileName);
-
-        if (Files.exists(targetFile) && Files.size(targetFile) > 0L) {
-            return targetFile;
-        }
-
-        try (InputStream inputStream = openBundledResource(resourcePath)) {
-            if (inputStream == null) {
-                throw new IOException("应用 classpath 中缺少 VOSK native 资源: " + resourcePath);
-            }
-            Files.copy(inputStream, targetFile, StandardCopyOption.REPLACE_EXISTING);
-        }
-        targetFile.toFile().deleteOnExit();
-        return targetFile;
-    }
-
-    private InputStream openBundledResource(String resourcePath) {
-        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-        if (classLoader != null) {
-            InputStream stream = classLoader.getResourceAsStream(resourcePath);
-            if (stream != null) {
-                return stream;
-            }
-        }
-        return SpeechListenerService.class.getClassLoader().getResourceAsStream(resourcePath);
-    }
-
-    private File resolveModelDirectory(String modelPath) {
-        if (modelPath == null || modelPath.trim().isEmpty()) {
-            return null;
-        }
-
-        File direct = new File(modelPath);
-        if (direct.exists() && direct.isDirectory() && containsModelFiles(direct)) {
-            return direct;
-        }
-
-        File packaged = new File(direct, "vosk-model-small-cn-0.22");
-        if (packaged.exists() && packaged.isDirectory() && containsModelFiles(packaged)) {
-            return packaged;
-        }
-
-        File nested = new File(direct, "model");
-        if (nested.exists() && nested.isDirectory() && containsModelFiles(nested)) {
-            return nested;
-        }
-
-        return null;
-    }
-
-    private File prepareRuntimeModelDirectory(File modelDir) throws IOException {
-        if (containsModelFiles(modelDir)) {
-            return modelDir;
-        }
-
-        File nestedModel = new File(modelDir, "vosk-model-small-cn-0.22");
-        if (containsModelFiles(nestedModel)) {
-            return nestedModel;
-        }
-
-        File altModel = new File(modelDir, "model");
-        if (containsModelFiles(altModel)) {
-            return altModel;
-        }
-
-        throw new IOException("VOSK 模型目录不完整: " + modelDir.getAbsolutePath() + "，请检查 am/conf/graph/ivector 是否都在同一级目录下。");
-    }
-
-    private File stageModelToAsciiPath(File sourceDir) throws IOException {
-        File javaTmp = new File(System.getProperty("java.io.tmpdir", "."));
-        File stageRoot = new File(javaTmp, "vosk-stage");
-        if (!stageRoot.exists() && !stageRoot.mkdirs()) {
-            throw new IOException("无法创建临时模型目录: " + stageRoot.getAbsolutePath());
-        }
-
-        File targetDir = new File(stageRoot, "vosk-model-small-cn-0.22");
-        if (containsModelFiles(targetDir)) {
-            return targetDir;
-        }
-        if (targetDir.exists()) {
-            deleteRecursively(targetDir);
-        }
-
-        copyRecursively(sourceDir, targetDir);
-        return targetDir;
-    }
-
-    private void copyRecursively(File source, File target) throws IOException {
-        if (source.isDirectory()) {
-            if (!target.exists() && !target.mkdirs()) {
-                throw new IOException("无法创建目录: " + target.getAbsolutePath());
-            }
-            File[] children = source.listFiles();
-            if (children == null) {
-                return;
-            }
-            for (int i = 0; i < children.length; i++) {
-                copyRecursively(children[i], new File(target, children[i].getName()));
-            }
-            return;
-        }
-
-        Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
-    }
-
-    private void deleteRecursively(File file) throws IOException {
-        if (!file.exists()) {
-            return;
-        }
-        if (file.isDirectory()) {
-            File[] children = file.listFiles();
-            if (children != null) {
-                for (int i = 0; i < children.length; i++) {
-                    deleteRecursively(children[i]);
-                }
-            }
-        }
-        Files.deleteIfExists(file.toPath());
-    }
-
-    private boolean containsModelFiles(File modelDir) {
-        String[] requiredEntries = new String[]{"am", "conf", "graph", "ivector"};
-        for (int i = 0; i < requiredEntries.length; i++) {
-            File entry = new File(modelDir, requiredEntries[i]);
-            if (!entry.exists()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private String describeDirectory(File dir) {
-        if (dir == null || !dir.exists()) {
-            return "<不存在>";
-        }
-        File[] files = dir.listFiles();
-        if (files == null || files.length == 0) {
-            return "<空目录>";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < files.length && i < 12; i++) {
-            if (i > 0) {
-                sb.append(", ");
-            }
-            sb.append(files[i].getName());
-            if (files[i].isDirectory()) {
-                sb.append("/");
-            }
-        }
-        if (files.length > 12) {
-            sb.append(" ... total=").append(files.length);
-        }
-        return sb.toString();
+        return "语音监听失败: " + message + "\n\n当前识别链路已移除 VOSK，只使用系统音频采集 + 阿里云实时语音识别。请检查阿里云 AppKey、AccessKeyId、AccessKeySecret、网络，以及音频采集组件是否可用。";
     }
 
     private double calculatePcm16LeRms(byte[] buffer, int length) {
@@ -453,15 +261,5 @@ public class SpeechListenerService {
             return 0.0D;
         }
         return Math.sqrt(sumSquares / (double) samples);
-    }
-
-    private String parseText(String resultJson) throws IOException {
-        JsonNode node = OBJECT_MAPPER.readTree(resultJson);
-        return node.path("text").asText("");
-    }
-
-    private String parsePartial(String resultJson) throws IOException {
-        JsonNode node = OBJECT_MAPPER.readTree(resultJson);
-        return node.path("partial").asText("");
     }
 }

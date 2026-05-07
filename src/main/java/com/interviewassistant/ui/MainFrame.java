@@ -353,7 +353,7 @@ public class MainFrame extends JFrame {
                         if ("监听已停止".equals(text)) {
                             listenButton.setText("开始监听");
                             listenButton.setBackground(new Color(22, 163, 74));
-                        } else if (text.startsWith("监听") || text.startsWith("正在使用")) {
+                        } else if (text.contains("监听") || text.startsWith("正在使用") || text.startsWith("音频采集方式")) {
                             listenButton.setText("停止监听");
                             listenButton.setBackground(new Color(220, 38, 38));
                         }
