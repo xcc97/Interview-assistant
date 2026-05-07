@@ -403,7 +403,8 @@ public class MainFrame extends JFrame {
             conversationListPanel.add(createEmptyState());
         } else {
             for (int i = 0; i < entries.size(); i++) {
-                conversationListPanel.add(createConversationCard(entries.get(i)));
+                JPanel card = createConversationCard(entries.get(i));
+                conversationListPanel.add(card);
                 if (i < entries.size() - 1) {
                     conversationListPanel.add(Box.createVerticalStrut(14));
                 }
@@ -412,10 +413,21 @@ public class MainFrame extends JFrame {
 
         conversationListPanel.revalidate();
         conversationListPanel.repaint();
+        scrollConversationToBottom();
+    }
+
+    private void scrollConversationToBottom() {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                conversationScrollPane.getVerticalScrollBar().setValue(conversationScrollPane.getVerticalScrollBar().getMaximum());
+                conversationListPanel.revalidate();
+                conversationScrollPane.getViewport().revalidate();
+                SwingUtilities.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        conversationScrollPane.getVerticalScrollBar().setValue(conversationScrollPane.getVerticalScrollBar().getMaximum());
+                    }
+                });
             }
         });
     }
