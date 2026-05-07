@@ -1,0 +1,12 @@
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\config\AssistantProperties.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\config\PropertiesConfig.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\controller\ClientApiController.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\controller\GlobalExceptionHandler.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\AnalyzeRequest.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\AnalyzeResponse.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\AsrTokenResponse.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\HealthResponse.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\InterviewAssistantServerApplication.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\service\AsrTokenService.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\service\BailianAnswerService.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\service\ClientAuthService.java

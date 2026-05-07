@@ -15,30 +15,46 @@ public class AliyunNlsAsrClient implements AsrClient {
     private static final String DEFAULT_URL = "wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1";
 
     private final AppConfig config;
+    private final BackendClient backendClient;
     private NlsClient nlsClient;
     private SpeechTranscriber transcriber;
     private final AtomicBoolean started = new AtomicBoolean(false);
 
     public AliyunNlsAsrClient(AppConfig config) {
         this.config = config;
+        this.backendClient = new BackendClient(config);
     }
 
     @Override
     public void start(Listener listener) throws Exception {
-        String appKey = config.getAliyunNlsAppKey();
+        String appKey;
+        String token;
+        String endpoint;
+        if (config.isBackendEnabled()) {
+            BackendClient.AsrCredential credential = backendClient.fetchAsrCredential();
+            appKey = credential.getAppKey();
+            token = credential.getToken();
+            endpoint = credential.getEndpoint();
+            listener.onStatus("已从后端获取阿里云实时识别授权");
+        } else {
+            appKey = config.getAliyunNlsAppKey();
+            if (appKey.isEmpty()) {
+                throw new IOException("未配置阿里云 NLS AppKey，请设置 ALIYUN_NLS_APP_KEY 或 application.properties 里的 aliyun.nls.appKey");
+            }
+            token = config.getAliyunNlsToken();
+            if (token.isEmpty()) {
+                token = createToken();
+            }
+            endpoint = resolveNlsUrl();
+        }
         if (appKey.isEmpty()) {
-            throw new IOException("未配置阿里云 NLS AppKey，请设置 ALIYUN_NLS_APP_KEY 或 application.properties 里的 aliyun.nls.appKey");
-        }
-
-        String token = config.getAliyunNlsToken();
-        if (token.isEmpty()) {
-            token = createToken();
+            throw new IOException("未获取到阿里云 NLS AppKey");
         }
         if (token.isEmpty()) {
-            throw new IOException("未获取到阿里云 NLS Token，请配置 ALIYUN_NLS_TOKEN，或配置 AccessKey 自动生成 Token");
+            throw new IOException("未获取到阿里云 NLS Token，请检查后端或本地 AccessKey 配置");
         }
 
-        nlsClient = new NlsClient(resolveNlsUrl(), token);
+        nlsClient = new NlsClient(endpoint.isEmpty() ? DEFAULT_URL : endpoint, token);
         transcriber = new SpeechTranscriber(nlsClient, createListener(listener));
         transcriber.setAppKey(appKey);
         transcriber.setFormat(InputFormatEnum.PCM);

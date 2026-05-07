@@ -21,10 +21,12 @@ public class BailianDeepSeekClient {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final AppConfig config;
+    private final BackendClient backendClient;
     private final OkHttpClient httpClient;
 
     public BailianDeepSeekClient(AppConfig config) {
         this.config = config;
+        this.backendClient = new BackendClient(config);
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(Duration.ofSeconds(15))
                 .readTimeout(Duration.ofSeconds(45))
@@ -32,6 +34,9 @@ public class BailianDeepSeekClient {
     }
 
     public InterviewAnalysis analyzeQuestion(String transcript, String resumeText) throws IOException {
+        if (config.isBackendEnabled()) {
+            return backendClient.analyzeQuestion(transcript, resumeText);
+        }
         String apiKey = config.getApiKey();
         if (apiKey.trim().isEmpty()) {
             throw new IOException("未检测到 API Key，请在环境变量 BAILIAN_API_KEY 或 application.properties 中配置。");

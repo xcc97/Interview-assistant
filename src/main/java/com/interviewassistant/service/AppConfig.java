@@ -12,6 +12,7 @@ public class AppConfig {
     private static final String DEFAULT_MODEL = "deepseek-v3";
     private static final int DEFAULT_MIN_TEXT_LENGTH = 6;
     private static final String DEFAULT_ASR_PROVIDER = "aliyun";
+    private static final String DEFAULT_BACKEND_BASE_URL = "http://localhost:8080";
 
     private final Properties properties = new Properties();
 
@@ -41,6 +42,31 @@ public class AppConfig {
     public String getModel() {
         String model = properties.getProperty("bailian.model", DEFAULT_MODEL).trim();
         return model.isEmpty() ? DEFAULT_MODEL : model;
+    }
+
+    public boolean isBackendEnabled() {
+        String fromEnv = System.getenv("INTERVIEW_ASSISTANT_BACKEND_ENABLED");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return Boolean.parseBoolean(fromEnv.trim());
+        }
+        return Boolean.parseBoolean(properties.getProperty("backend.enabled", "false").trim());
+    }
+
+    public String getBackendBaseUrl() {
+        String fromEnv = System.getenv("INTERVIEW_ASSISTANT_BACKEND_URL");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return trimTrailingSlash(fromEnv.trim());
+        }
+        String baseUrl = properties.getProperty("backend.baseUrl", DEFAULT_BACKEND_BASE_URL).trim();
+        return trimTrailingSlash(baseUrl.isEmpty() ? DEFAULT_BACKEND_BASE_URL : baseUrl);
+    }
+
+    public String getBackendClientSecret() {
+        String fromEnv = System.getenv("INTERVIEW_ASSISTANT_CLIENT_SECRET");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
+        }
+        return properties.getProperty("backend.clientSecret", "").trim();
     }
 
     public String getAsrProvider() {
@@ -174,6 +200,8 @@ public class AppConfig {
         sb.append("os.arch = ").append(System.getProperty("os.arch", "")).append('\n');
         sb.append("java.version = ").append(System.getProperty("java.version", "")).append('\n');
         sb.append("user.dir = ").append(System.getProperty("user.dir", "")).append('\n');
+        sb.append("resolved.backendEnabled = ").append(isBackendEnabled()).append('\n');
+        sb.append("resolved.backendBaseUrl = ").append(getBackendBaseUrl()).append('\n');
         sb.append("resolved.asrProvider = ").append(getAsrProvider()).append('\n');
         sb.append("resolved.asrMixerName = ").append(getAsrMixerName()).append('\n');
         sb.append("resolved.aliyunNlsAppKey = ").append(maskValue(getAliyunNlsAppKey())).append('\n');
@@ -186,6 +214,14 @@ public class AppConfig {
     private String safeEnv(String name) {
         String value = System.getenv(name);
         return value == null ? "" : value.trim();
+    }
+
+    private String trimTrailingSlash(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        while (trimmed.endsWith("/") && trimmed.length() > 1) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 
     private String maskValue(String value) {

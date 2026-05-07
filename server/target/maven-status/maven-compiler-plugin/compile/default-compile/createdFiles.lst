@@ -1,0 +1,15 @@
+com\interviewassistant\server\InterviewAssistantServerApplication.class
+com\interviewassistant\server\dto\AsrTokenResponse.class
+com\interviewassistant\server\config\AssistantProperties.class
+com\interviewassistant\server\dto\HealthResponse.class
+com\interviewassistant\server\dto\AnalyzeResponse.class
+com\interviewassistant\server\controller\GlobalExceptionHandler.class
+com\interviewassistant\server\service\ClientAuthService.class
+com\interviewassistant\server\service\AsrTokenService.class
+com\interviewassistant\server\service\BailianAnswerService.class
+com\interviewassistant\server\config\AssistantProperties$Bailian.class
+com\interviewassistant\server\config\AssistantProperties$Aliyun.class
+com\interviewassistant\server\service\AsrTokenService$TokenResult.class
+com\interviewassistant\server\config\PropertiesConfig.class
+com\interviewassistant\server\dto\AnalyzeRequest.class
+com\interviewassistant\server\controller\ClientApiController.class
