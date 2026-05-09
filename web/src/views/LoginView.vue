@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { register } from '../api';
 import { useSessionStore } from '../stores/session';
@@ -7,12 +7,28 @@ import { useSessionStore } from '../stores/session';
 const router = useRouter();
 const route = useRoute();
 const session = useSessionStore();
-const mode = ref('login');
+const mode = ref(route.query.mode === 'register' ? 'register' : 'login');
 const nickname = ref('');
 const phone = ref('');
 const password = ref('');
 const submitting = ref(false);
 const errorText = ref('');
+
+watch(
+  () => route.query.mode,
+  (value) => {
+    mode.value = value === 'register' ? 'register' : 'login';
+    errorText.value = '';
+  }
+);
+
+function switchMode() {
+  const nextMode = mode.value === 'login' ? 'register' : 'login';
+  router.replace({
+    name: 'login',
+    query: nextMode === 'register' ? { ...route.query, mode: 'register' } : { ...route.query, mode: undefined },
+  });
+}
 
 async function handleSubmit() {
   submitting.value = true;
@@ -60,7 +76,7 @@ async function handleSubmit() {
       <button class="primary-btn full" :disabled="submitting" @click="handleSubmit">
         {{ submitting ? '处理中...' : mode === 'login' ? '登录' : '注册并登录' }}
       </button>
-      <button class="secondary-btn full auth-switch" @click="mode = mode === 'login' ? 'register' : 'login'">
+      <button class="secondary-btn full auth-switch" @click="switchMode">
         {{ mode === 'login' ? '还没有账号？去注册' : '已有账号？去登录' }}
       </button>
     </div>

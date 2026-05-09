@@ -1,11 +1,13 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { getBalanceTransactions, getProfile } from '../api';
+import { getBalanceTransactions, getOrders, getProfile, getUsageSessions } from '../api';
 import { useSessionStore } from '../stores/session';
 
 const session = useSessionStore();
 const profile = ref(null);
 const transactions = ref([]);
+const orders = ref([]);
+const usageRecords = ref([]);
 const loading = ref(false);
 const errorText = ref('');
 const showOpenClientHint = ref(false);
@@ -43,6 +45,45 @@ function signedDuration(seconds) {
   return `${sign}${formatDuration(Math.abs(value))}`;
 }
 
+function transactionTypeText(type, seconds) {
+  if (type === 'GRANT' || type === 'RECHARGE' || Number(seconds) > 0) return '时长增加';
+  if (type === 'CONSUME' || type === 'DEDUCT' || Number(seconds) < 0) return '时长扣减';
+  if (type === 'REFUND') return '退款返还';
+  if (type === 'ADJUST') return '人工调整';
+  return type || '余额变动';
+}
+
+function transactionSourceText(item) {
+  if (item.sourceName) return item.sourceName;
+  if (item.sourceType === 'ORDER') return '套餐订单';
+  if (item.sourceType === 'SESSION') return '面试使用';
+  if (item.sourceType === 'USAGE_SESSION') return '使用记录';
+  if (item.sourceType === 'ADMIN') return '人工处理';
+  if (item.sourceType === 'REFUND') return '退款';
+  return item.sourceType || '系统记录';
+}
+
+function statusText(status) {
+  if (status === 'PAID') return '已支付';
+  if (status === 'PENDING') return '待支付';
+  if (status === 'ACTIVE') return '进行中';
+  if (status === 'SETTLED') return '已结算';
+  return status || '-';
+}
+
+function sceneText(scene) {
+  if (scene === 'INTERVIEW_ASSIST' || scene === 'DESKTOP_INTERVIEW_ASSIST') return '实时面试辅助';
+  if (scene === 'MOCK_INTERVIEW') return '模拟面试练习';
+  return scene || '-';
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return '-';
+  }
+  return String(value).replace('T', ' ').slice(0, 16);
+}
+
 function openClient() {
   showOpenClientHint.value = false;
   const startedAt = Date.now();
@@ -73,12 +114,16 @@ async function loadDashboard() {
   loading.value = true;
   errorText.value = '';
   try {
-    const [profileResult, transactionResult] = await Promise.all([
+    const [profileResult, transactionResult, orderResult, usageResult] = await Promise.all([
       getProfile(),
       getBalanceTransactions(),
+      getOrders(),
+      getUsageSessions(),
     ]);
     profile.value = profileResult;
     transactions.value = transactionResult.slice(0, 5);
+    orders.value = orderResult.slice(0, 5);
+    usageRecords.value = usageResult.slice(0, 5);
   } catch (error) {
     errorText.value = error.message;
   } finally {
@@ -123,14 +168,51 @@ onMounted(loadDashboard);
 
     <div class="content-grid two-columns">
       <article class="card">
-        <h3>最近余额流水</h3>
+        <div class="card-title-row">
+          <h3>最近订单</h3>
+          <RouterLink class="secondary-btn small-btn link-btn" to="/orders">查看全部</RouterLink>
+        </div>
+        <div v-if="orders.length" class="mini-list">
+          <div v-for="order in orders" :key="order.id || order.orderId" class="mini-list-item">
+            <div>
+              <strong>{{ order.planName || '套餐订单' }}</strong>
+              <p>¥{{ order.amount }} · {{ order.grantedMinutes || order.minutes }} 分钟</p>
+            </div>
+            <span :class="['status-badge', order.status === 'PAID' ? 'success' : 'warning']">{{ statusText(order.status) }}</span>
+          </div>
+        </div>
+        <div v-else class="empty-state compact">暂无订单，购买套餐后会显示在这里。</div>
+      </article>
+
+      <article class="card">
+        <div class="card-title-row">
+          <h3>最近使用记录</h3>
+          <RouterLink class="secondary-btn small-btn link-btn" to="/usage">查看全部</RouterLink>
+        </div>
+        <div v-if="usageRecords.length" class="mini-list">
+          <div v-for="record in usageRecords" :key="record.id || record.sessionId" class="mini-list-item">
+            <div>
+              <strong>{{ sceneText(record.scenario) }}</strong>
+              <p>{{ formatDateTime(record.startedAt) }} · {{ formatDuration(record.durationSeconds || 0) }}</p>
+            </div>
+            <span :class="['status-badge', record.status === 'SETTLED' ? 'success' : 'warning']">{{ statusText(record.status) }}</span>
+          </div>
+        </div>
+        <div v-else class="empty-state compact">暂无使用记录，开始面试后会显示每次使用情况。</div>
+      </article>
+
+      <article class="card">
+        <div class="card-title-row">
+          <h3>最近余额流水</h3>
+          <RouterLink class="secondary-btn small-btn link-btn" to="/transactions">查看全部</RouterLink>
+        </div>
         <div v-if="transactions.length" class="mini-list">
           <div v-for="item in transactions" :key="item.id" class="mini-list-item">
             <div>
-              <strong>{{ item.type }}</strong>
-              <p>{{ item.sourceType }} · {{ item.sourceId }}</p>
+              <strong>{{ transactionTypeText(item.type, item.seconds ?? ((item.minutes || 0) * 60)) }}</strong>
+              <p>{{ transactionSourceText(item) }}</p>
             </div>
-            <span :class="['amount-text', item.seconds > 0 ? 'plus' : 'minus']">
+            <span :class="['amount-text', (item.seconds ?? ((item.minutes || 0) * 60)) > 0 ? 'plus' : 'minus']">
               {{ signedDuration(item.seconds ?? ((item.minutes || 0) * 60)) }}
             </span>
           </div>

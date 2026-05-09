@@ -101,6 +101,7 @@
                         <configuration>
                             <includeScope>runtime</includeScope>
                             <outputDirectory>${project.build.directory}/installer/input/lib</outputDirectory>
+                            <useRepositoryLayout>true</useRepositoryLayout>
                         </configuration>
                     </execution>
                 </executions>

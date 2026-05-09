@@ -5,7 +5,7 @@ import DashboardView from '../views/DashboardView.vue';
 import BillingView from '../views/BillingView.vue';
 import OrdersView from '../views/OrdersView.vue';
 import UsageView from '../views/UsageView.vue';
-import ConsoleView from '../views/ConsoleView.vue';
+import TransactionsView from '../views/TransactionsView.vue';
 import DownloadView from '../views/DownloadView.vue';
 import TermsView from '../views/TermsView.vue';
 import PrivacyView from '../views/PrivacyView.vue';
@@ -24,7 +24,8 @@ const router = createRouter({
     { path: '/billing', name: 'billing', component: BillingView, meta: { requiresAuth: true } },
     { path: '/orders', name: 'orders', component: OrdersView, meta: { requiresAuth: true } },
     { path: '/usage', name: 'usage', component: UsageView, meta: { requiresAuth: true } },
-    { path: '/console', name: 'console', component: ConsoleView, meta: { requiresAuth: true } },
+    { path: '/transactions', name: 'transactions', component: TransactionsView, meta: { requiresAuth: true } },
+    { path: '/console', redirect: { name: 'home', hash: '#try' } },
     { path: '/download', name: 'download', component: DownloadView },
     { path: '/readiness', name: 'readiness', component: ReadinessView, meta: { requiresAuth: true, requiresAdmin: true } },
     { path: '/admin/ops', name: 'admin-ops', component: AdminOperationsView, meta: { requiresAuth: true, requiresAdmin: true } },

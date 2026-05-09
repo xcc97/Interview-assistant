@@ -7,19 +7,21 @@ public class BalanceTransactionResponse {
     private int seconds;
     private String sourceType;
     private String sourceId;
+    private String sourceName;
     private String createdAt;
 
     public BalanceTransactionResponse() {
     }
 
     public BalanceTransactionResponse(String transactionId, String type, int minutes, int seconds,
-                                      String sourceType, String sourceId, String createdAt) {
+                                      String sourceType, String sourceId, String sourceName, String createdAt) {
         this.transactionId = transactionId;
         this.type = type;
         this.minutes = minutes;
         this.seconds = seconds;
         this.sourceType = sourceType;
         this.sourceId = sourceId;
+        this.sourceName = sourceName;
         this.createdAt = createdAt;
     }
 
@@ -69,6 +71,14 @@ public class BalanceTransactionResponse {
 
     public void setSourceId(String sourceId) {
         this.sourceId = sourceId;
+    }
+
+    public String getSourceName() {
+        return sourceName;
+    }
+
+    public void setSourceName(String sourceName) {
+        this.sourceName = sourceName;
     }
 
     public String getCreatedAt() {

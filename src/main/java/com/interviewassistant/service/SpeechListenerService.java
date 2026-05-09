@@ -99,7 +99,7 @@ public class SpeechListenerService {
             });
 
             captureProvider = SystemAudioCaptureProviderFactory.create();
-            callback.onStatus("音频采集方式: " + captureProvider.getName());
+            callback.onStatus("面试辅助已启动");
             final long[] totalBytes = new long[]{0L};
             final long[] lastLevelLog = new long[]{System.currentTimeMillis()};
             final long[] quietStartedAt = new long[]{lastLevelLog[0]};
@@ -125,9 +125,6 @@ public class SpeechListenerService {
                         System.out.println("[AUDIO-CAPTURE] provider=" + captureProvider.getName()
                                 + ", bytes=" + totalBytes[0]
                                 + ", rms=" + String.format(java.util.Locale.US, "%.2f", rms));
-                        if (now - quietStartedAt[0] > 5000L) {
-                            callback.onStatus("监听中，但当前系统音频几乎是静音；请确认会议正在播放声音");
-                        }
                         lastLevelLog[0] = now;
                     }
                     asrClient.sendAudio(pcm16le, length);

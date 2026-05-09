@@ -1,12 +1,10 @@
 <script setup>
 import { onMounted, ref } from 'vue';
-import { finishUsageSession, getUsageSessions, startUsageSession } from '../api';
+import { getUsageSessions } from '../api';
 
 const usageRecords = ref([]);
 const loading = ref(false);
-const operating = ref(false);
 const errorText = ref('');
-const successText = ref('');
 
 const settlementRules = [
   '每次实时辅助或模拟练习都会生成一条使用记录。',
@@ -22,9 +20,15 @@ function formatDuration(seconds) {
 }
 
 function sceneText(scene) {
-  if (scene === 'INTERVIEW_ASSIST') return '实时面试辅助';
+  if (scene === 'INTERVIEW_ASSIST' || scene === 'DESKTOP_INTERVIEW_ASSIST') return '实时面试辅助';
   if (scene === 'MOCK_INTERVIEW') return '模拟面试练习';
-  return scene;
+  return '面试辅助';
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  const normalized = String(value).replace('T', ' ').replace(/\.\d+.*$/, '').replace(/Z$/, '');
+  return normalized.slice(0, 16);
 }
 
 function statusText(status) {
@@ -45,36 +49,6 @@ async function loadUsage() {
   }
 }
 
-async function handleStartSession() {
-  operating.value = true;
-  errorText.value = '';
-  successText.value = '';
-  try {
-    const session = await startUsageSession({ scenario: 'INTERVIEW_ASSIST' });
-    successText.value = `会话 ${session.sessionId || session.id} 已开始。`;
-    await loadUsage();
-  } catch (error) {
-    errorText.value = error.message;
-  } finally {
-    operating.value = false;
-  }
-}
-
-async function handleFinishSession(sessionId) {
-  operating.value = true;
-  errorText.value = '';
-  successText.value = '';
-  try {
-    const session = await finishUsageSession({ sessionId });
-    successText.value = `会话 ${session.sessionId || session.id} 已完成结算。`;
-    await loadUsage();
-  } catch (error) {
-    errorText.value = error.message;
-  } finally {
-    operating.value = false;
-  }
-}
-
 onMounted(loadUsage);
 </script>
 
@@ -86,13 +60,9 @@ onMounted(loadUsage);
         <h2>使用记录</h2>
         <p>查看每次使用 nod 的开始时间、持续时长和结算状态。</p>
       </div>
-      <button class="primary-btn" :disabled="operating" @click="handleStartSession">
-        {{ operating ? '处理中...' : '开始一段新会话' }}
-      </button>
     </div>
 
     <p v-if="errorText" class="error-text">{{ errorText }}</p>
-    <p v-if="successText" class="success-text">{{ successText }}</p>
 
     <article class="card table-card">
       <div v-if="loading" class="empty-state compact">使用记录加载中...</div>
@@ -100,36 +70,22 @@ onMounted(loadUsage);
         <table class="data-table">
           <thead>
             <tr>
-              <th>记录号</th>
               <th>场景</th>
               <th>开始时间</th>
               <th>结束时间</th>
               <th>实际时长</th>
               <th>扣费分钟</th>
               <th>状态</th>
-              <th>操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="record in usageRecords" :key="record.id || record.sessionId">
-              <td>{{ record.id || record.sessionId }}</td>
               <td>{{ sceneText(record.scenario) }}</td>
-              <td>{{ record.startedAt }}</td>
-              <td>{{ record.endedAt || '-' }}</td>
+              <td>{{ formatDateTime(record.startedAt) }}</td>
+              <td>{{ formatDateTime(record.endedAt) }}</td>
               <td>{{ formatDuration(record.durationSeconds) }}</td>
               <td>{{ record.chargedMinutes }} 分钟</td>
               <td><span :class="['status-badge', record.status === 'SETTLED' ? 'success' : 'warning']">{{ statusText(record.status) }}</span></td>
-              <td>
-                <button
-                  v-if="record.status === 'ACTIVE'"
-                  class="secondary-btn small-btn"
-                  :disabled="operating"
-                  @click="handleFinishSession(record.id || record.sessionId)"
-                >
-                  结束并结算
-                </button>
-                <span v-else>--</span>
-              </td>
             </tr>
           </tbody>
         </table>

@@ -9,6 +9,7 @@ MAIN_JAR="remote-interview-assistant-1.0.0.jar"
 MAIN_CLASS="com.interviewassistant.Main"
 INPUT_DIR="$ROOT_DIR/target/installer/input"
 OUTPUT_DIR="$ROOT_DIR/release/desktop"
+MAC_RESOURCE_DIR="$ROOT_DIR/target/installer/macos-resources"
 
 cd "$ROOT_DIR"
 
@@ -20,12 +21,24 @@ fi
 mvn -q -DskipTests package
 mkdir -p "$OUTPUT_DIR"
 
-if [[ -f "$ROOT_DIR/packaging/macos/make-icon.sh" ]]; then
+if [[ -n "${REGENERATE_ICON:-}" && -f "$ROOT_DIR/packaging/macos/make-icon.sh" ]]; then
   bash "$ROOT_DIR/packaging/macos/make-icon.sh"
+elif [[ ! -f "$ROOT_DIR/packaging/macos/nod.icns" ]]; then
+  echo "缺少 packaging/macos/nod.icns，请先设置 REGENERATE_ICON=1 生成一次图标。" >&2
+  exit 1
+fi
+
+if [[ -f "$ROOT_DIR/packaging/macos/nod.icns" ]]; then
+  mkdir -p "$MAC_RESOURCE_DIR"
+  cp "$ROOT_DIR/packaging/macos/nod.icns" "$MAC_RESOURCE_DIR/$APP_NAME.icns"
 fi
 
 if [[ -x "$ROOT_DIR/native/macos/system-audio-capture/build.sh" ]]; then
-  (cd "$ROOT_DIR/native/macos/system-audio-capture" && bash build.sh)
+  if [[ -n "${SKIP_NATIVE_BUILD:-}" && -f "$ROOT_DIR/native/macos/system-audio-capture/system-audio-capture" ]]; then
+    echo "跳过 macOS 音频采集组件构建，复用现有二进制。"
+  else
+    (cd "$ROOT_DIR/native/macos/system-audio-capture" && bash build.sh)
+  fi
 fi
 
 mkdir -p "$INPUT_DIR/native/macos" "$INPUT_DIR/native/windows"
@@ -41,7 +54,7 @@ fi
 OS_NAME="$(uname -s)"
 case "$OS_NAME" in
   Darwin)
-    PACKAGE_TYPE="dmg"
+    PACKAGE_TYPE="${MAC_PACKAGE_TYPE:-dmg}"
     ;;
   MINGW*|MSYS*|CYGWIN*)
     PACKAGE_TYPE="msi"
@@ -72,20 +85,26 @@ if [[ -f "$ROOT_DIR/packaging/macos/nod.icns" ]]; then
   COMMON_ARGS+=(--icon "$ROOT_DIR/packaging/macos/nod.icns")
 fi
 
-if [[ "$PACKAGE_TYPE" == "dmg" ]]; then
+if [[ "$OS_NAME" == "Darwin" ]]; then
   COMMON_ARGS+=(--mac-package-name "$APP_NAME")
-  if [[ -f "$ROOT_DIR/packaging/macos/nod.icns" ]]; then
-    COMMON_ARGS+=(--icon "$ROOT_DIR/packaging/macos/nod.icns")
-  fi
-  if [[ -f "$ROOT_DIR/packaging/macos/Info.plist" ]]; then
-    COMMON_ARGS+=(--resource-dir "$ROOT_DIR/packaging/macos")
+  if [[ -d "$MAC_RESOURCE_DIR" ]]; then
+    COMMON_ARGS+=(--resource-dir "$MAC_RESOURCE_DIR")
   fi
   COMMON_ARGS+=(--java-options "-Dapple.awt.application.name=$APP_NAME")
 fi
 
-jpackage "${COMMON_ARGS[@]}"
+if [[ "$OS_NAME" == "Darwin" && "$PACKAGE_TYPE" == "dmg" && -z "${NO_DMG_FALLBACK:-}" ]]; then
+  if ! jpackage "${COMMON_ARGS[@]}"; then
+    echo "DMG 生成失败，自动回退生成 app-image。" >&2
+    PACKAGE_TYPE="app-image"
+    COMMON_ARGS[1]="$PACKAGE_TYPE"
+    jpackage "${COMMON_ARGS[@]}"
+  fi
+else
+  jpackage "${COMMON_ARGS[@]}"
+fi
 
-if [[ "$PACKAGE_TYPE" == "dmg" ]]; then
+if [[ "$OS_NAME" == "Darwin" && "$PACKAGE_TYPE" == "dmg" ]]; then
   FOUND_FILE="$(find "$OUTPUT_DIR" -maxdepth 1 -name "*.dmg" -print -quit)"
   if [[ -n "$FOUND_FILE" ]]; then
     cp "$FOUND_FILE" "$ROOT_DIR/web/public/downloads/nod.dmg"

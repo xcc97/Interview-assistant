@@ -17,7 +17,7 @@ const runtimeConfig = getRuntimeConfig();
 
 const orderRules = [
   '待支付订单不会扣减余额，完成支付后时长会自动到账。',
-  '如遇支付后未到账，请保留订单号并联系客服处理。',
+  '如遇支付后未到账，请联系客服处理。',
   '已到账套餐可在用户中心查看剩余时长和有效期。',
 ];
 
@@ -159,7 +159,7 @@ onBeforeUnmount(clearPaymentPolling);
         <img class="payment-qr" :src="qrImageUrl(paymentResult.codeUrl)" alt="微信支付二维码" />
         <div>
           <strong>请使用微信扫码支付</strong>
-          <p>订单号：{{ paymentResult.orderId }}</p>
+          <p>请在支付完成后回到本页面刷新状态。</p>
           <small>支付完成后，点击下方按钮刷新订单状态。</small>
         </div>
       </div>
@@ -185,7 +185,6 @@ onBeforeUnmount(clearPaymentPolling);
         <table class="data-table">
           <thead>
             <tr>
-              <th>订单号</th>
               <th>套餐</th>
               <th>金额</th>
               <th>分钟数</th>
@@ -197,7 +196,6 @@ onBeforeUnmount(clearPaymentPolling);
           </thead>
           <tbody>
             <tr v-for="order in orders" :key="order.id || order.orderId">
-              <td>{{ order.id || order.orderId }}</td>
               <td>{{ order.planName }}</td>
               <td>¥{{ order.amount }}</td>
               <td>{{ order.grantedMinutes || order.minutes }} 分钟</td>

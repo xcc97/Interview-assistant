@@ -7,15 +7,17 @@ const session = useSessionStore();
 const router = useRouter();
 
 const navItems = computed(() => {
-  const items = [
-    { to: '/', label: '首页' },
-    { to: '/billing', label: '价格' },
-    { to: '/download', label: '下载客户端' },
-    { to: '/dashboard', label: '我的点头' },
-    { to: '/orders', label: '订单' },
-    { to: '/usage', label: '用量' },
-    { to: '/console', label: '体验' },
-  ];
+  const items = session.isAuthenticated
+    ? [
+        { to: '/', label: '首页' },
+        { to: '/billing', label: '价格' },
+        { to: '/download', label: '下载客户端' },
+        { to: '/dashboard', label: '个人中心' },
+      ]
+    : [
+        { to: '/', label: '首页' },
+        { to: '/download', label: '下载客户端' },
+      ];
   if (session.isAdmin) {
     items.push({ to: '/readiness', label: '上线检查' });
     items.push({ to: '/admin/ops', label: '运营管理' });
@@ -46,7 +48,10 @@ function handleLogout() {
         <RouterLink v-for="item in navItems" :key="item.to" class="nav-link" :to="item.to">
           {{ item.label }}
         </RouterLink>
-        <RouterLink v-if="!session.isAuthenticated" class="login-pill" to="/login">登录</RouterLink>
+        <template v-if="!session.isAuthenticated">
+          <RouterLink class="nav-link" to="/login?mode=register">注册</RouterLink>
+          <RouterLink class="login-pill" to="/login">登录</RouterLink>
+        </template>
         <button v-else class="login-pill" @click="handleLogout">退出</button>
       </div>
     </nav>

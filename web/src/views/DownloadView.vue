@@ -4,9 +4,7 @@
       <div>
         <p class="eyebrow">Download Client</p>
         <h2>下载 nod 点头客户端</h2>
-        <p>Web 负责注册、购买和查看用量；真正远程面试时，请打开桌面客户端获得实时辅助。</p>
       </div>
-      <RouterLink class="primary-btn link-btn" to="/billing">先购买套餐</RouterLink>
     </div>
 
     <div class="content-grid two-columns download-grid">
@@ -14,9 +12,8 @@
         <span class="status-badge success">推荐</span>
         <h3>macOS 客户端</h3>
         <p>适合 MacBook 用户，在远程面试前启动客户端，登录账号后即可检查余额并开始辅助会话。</p>
-        <button class="primary-btn full" @click="openClient">打开 nod 客户端</button>
         <a class="secondary-btn link-btn full" href="/downloads/nod.dmg" download>下载 macOS 安装包</a>
-        <p class="compact-note">已安装时会尝试通过 nod://open 打开客户端；未安装时请下载 nod.dmg。</p>
+        <p class="compact-note">下载后打开 nod.dmg，并将 nod 拖入 Applications 文件夹完成安装。</p>
       </article>
 
       <article class="card download-card">
@@ -29,32 +26,25 @@
     </div>
 
     <article class="card usage-guide-card">
-      <h3>客户使用流程</h3>
+      <h3>使用流程</h3>
       <ol class="ordered-list">
         <li>注册或登录 nod 点头账号。</li>
-        <li>进入价格页购买套餐，本地测试可使用模拟支付。</li>
-        <li>回到我的点头确认剩余可用时长。</li>
-        <li>下载并打开桌面客户端，使用同一账号登录。</li>
-        <li>远程面试开始前点击开始辅助，面试结束后停止会话，系统按分钟扣费。</li>
+        <li>购买适合自己的面试辅助套餐。</li>
+        <li>下载并安装桌面客户端，使用同一账号登录。</li>
+        <li>面试前导入简历，让回答建议更贴合你的经历。</li>
+        <li>远程面试开始前点击“开始面试”，结束后点击“结束面试”。</li>
       </ol>
     </article>
 
     <article class="card usage-guide-card">
-      <h3>安装包生成与发布</h3>
-      <p>使用 JDK 21 自带的 jpackage 生成可安装包。macOS 需要在 Mac 上构建 .dmg，Windows 需要在 Windows 上构建 .msi。</p>
-      <div class="config-list">
-        <div><strong>macOS 构建脚本</strong><span>scripts/package-desktop.sh</span></div>
-        <div><strong>Windows 构建脚本</strong><span>scripts/package-desktop.ps1</span></div>
-        <div><strong>下载目录</strong><span>web/public/downloads/</span></div>
-      </div>
+      <h3>安装提示</h3>
+      <ol class="ordered-list">
+        <li>如果 macOS 提示来自互联网，请在系统提示中确认打开。</li>
+        <li>首次使用前，请确保客户端已登录，并确认账号有可用时长。</li>
+        <li>面试时建议提前打开客户端并测试音频采集状态。</li>
+        <li>如遇安装或使用问题，可以通过页面底部“联系我们”获取帮助。</li>
+      </ol>
     </article>
   </section>
 </template>
 
-<script setup>
-import { RouterLink } from 'vue-router';
-
-function openClient() {
-  window.location.href = 'nod://open';
-}
-</script>

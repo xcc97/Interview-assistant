@@ -41,9 +41,14 @@ function paymentChannelText(channel) {
   return channel || '-';
 }
 
-function compactText(value, maxLength = 120) {
+function compactText(value, maxLength = 80) {
   if (!value) return '-';
   return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  return String(value).replace('T', ' ').replace(/\.\d+.*$/, '').replace(/Z$/, '').slice(0, 16);
 }
 
 async function loadOrders() {
@@ -183,9 +188,9 @@ onMounted(async () => {
               <td>{{ paymentChannelText(order.paymentChannel) }}</td>
               <td>{{ order.paymentTransactionId || '-' }}</td>
               <td>
-                <small>创建：{{ order.createdAt || '-' }}</small><br />
-                <small>支付：{{ order.paidAt || '-' }}</small><br />
-                <small>关闭：{{ order.closedAt || '-' }}</small>
+                <small>创建：{{ formatDateTime(order.createdAt) }}</small><br />
+                <small>支付：{{ formatDateTime(order.paidAt) }}</small><br />
+                <small>关闭：{{ formatDateTime(order.closedAt) }}</small>
                 <p v-if="order.closeReason" class="compact-note">{{ order.closeReason }}</p>
               </td>
               <td>
@@ -250,7 +255,7 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="log in callbackLogs" :key="log.id">
-              <td>{{ log.createdAt }}</td>
+              <td>{{ formatDateTime(log.createdAt) }}</td>
               <td>{{ paymentChannelText(log.paymentChannel) }}</td>
               <td>{{ log.orderId || '-' }}</td>
               <td>{{ log.transactionId || '-' }}</td>

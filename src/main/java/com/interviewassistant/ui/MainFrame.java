@@ -22,12 +22,14 @@ import javax.swing.JTextField;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
+import javax.swing.ImageIcon;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import javax.swing.WindowConstants;
 import javax.swing.border.EmptyBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import java.awt.Image;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -36,15 +38,16 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
 import java.io.File;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainFrame extends JFrame {
-    private final JLabel statusLabel = new JLabel("就绪");
-    private final JLabel userStatusLabel = new JLabel("未登录");
-    private final JLabel resumeStatusLabel = new JLabel("未导入简历");
+    private final JLabel statusLabel = new JLabel("");
+    private final JLabel accountInfoLabel = new JLabel("账号：未登录");
+    private final JLabel resumeInfoLabel = new JLabel("简历：未导入");
     private final JLabel audioStatusLabel = new JLabel("系统音频采集组件检测中...");
     private final JPanel conversationListPanel = new JPanel();
     private final JScrollPane conversationScrollPane = new JScrollPane();
@@ -65,15 +68,26 @@ public class MainFrame extends JFrame {
     private Timer billingTimer;
     private BackendClient.UserProfile currentUserProfile;
     private JButton loginButton;
+    private JButton importResumeButton;
     private JButton listenButton;
+    private JButton analyzeButton;
 
     public MainFrame() {
-        super("远程面试助手");
+        super("nod");
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         setSize(new Dimension(1180, 760));
         setMinimumSize(new Dimension(980, 660));
         setLocationRelativeTo(null);
+        applyAppIcon();
         initUi();
+    }
+
+    private void applyAppIcon() {
+        URL iconUrl = MainFrame.class.getResource("/icons/nod.png");
+        if (iconUrl != null) {
+            Image icon = new ImageIcon(iconUrl).getImage();
+            setIconImage(icon);
+        }
     }
 
     private void initUi() {
@@ -84,10 +98,29 @@ public class MainFrame extends JFrame {
 
         JPanel header = new JPanel(new BorderLayout(12, 8));
         header.setOpaque(false);
-        JLabel title = new JLabel("远程面试助手");
+
+        JPanel titleBlock = new JPanel();
+        titleBlock.setOpaque(false);
+        titleBlock.setLayout(new BoxLayout(titleBlock, BoxLayout.Y_AXIS));
+
+        JLabel title = new JLabel("nod面试助手");
         title.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 24));
         title.setForeground(new Color(15, 23, 42));
-        header.add(title, BorderLayout.WEST);
+        title.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel infoRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        infoRow.setOpaque(false);
+        infoRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        setupInfoLabel(accountInfoLabel);
+        setupInfoLabel(resumeInfoLabel);
+        infoRow.add(accountInfoLabel);
+        infoRow.add(resumeInfoLabel);
+
+        titleBlock.add(title);
+        titleBlock.add(Box.createVerticalStrut(8));
+        titleBlock.add(infoRow);
+
+        header.add(titleBlock, BorderLayout.WEST);
         header.add(buildToolbar(), BorderLayout.EAST);
         root.add(header, BorderLayout.NORTH);
 
@@ -116,23 +149,21 @@ public class MainFrame extends JFrame {
     }
 
     private JPanel buildToolbar() {
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        toolbar.setOpaque(false);
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        toolbar.setOpaque(true);
+        toolbar.setBackground(new Color(255, 255, 255, 210));
+        toolbar.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(226, 232, 240)),
+                new EmptyBorder(6, 6, 6, 6)
+        ));
 
-        loginButton = createButton("登录", new Color(15, 23, 42), Color.WHITE);
-        JButton importResumeButton = createButton("导入简历", new Color(238, 242, 255), new Color(67, 56, 202));
-        JButton analyzeButton = createButton("手动补充", new Color(37, 99, 235), Color.WHITE);
-        JButton clearButton = createButton("清空记录", new Color(243, 244, 246), new Color(55, 65, 81));
-        listenButton = createButton("开始监听", new Color(22, 163, 74), Color.WHITE);
+        loginButton = createButton("登录", new Color(248, 250, 252), new Color(15, 23, 42));
+        importResumeButton = createButton("导入简历", new Color(238, 242, 255), new Color(67, 56, 202));
+        listenButton = createButton("开始面试", new Color(22, 163, 74), Color.WHITE);
+        analyzeButton = createButton("手动补充", new Color(239, 246, 255), new Color(37, 99, 235));
+        JButton clearButton = createButton("清空记录", new Color(248, 250, 252), new Color(100, 116, 139));
 
-        userStatusLabel.setForeground(new Color(185, 28, 28));
-        userStatusLabel.setBorder(new EmptyBorder(0, 0, 0, 8));
-        resumeStatusLabel.setForeground(new Color(107, 114, 128));
-        resumeStatusLabel.setBorder(new EmptyBorder(0, 0, 0, 8));
-
-        toolbar.add(userStatusLabel);
         toolbar.add(loginButton);
-        toolbar.add(resumeStatusLabel);
         toolbar.add(importResumeButton);
         toolbar.add(listenButton);
         toolbar.add(analyzeButton);
@@ -146,6 +177,17 @@ public class MainFrame extends JFrame {
         return toolbar;
     }
 
+    private void setupInfoLabel(JLabel label) {
+        label.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 12));
+        label.setForeground(new Color(100, 116, 139));
+        label.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(226, 232, 240)),
+                new EmptyBorder(4, 9, 4, 9)
+        ));
+        label.setOpaque(true);
+        label.setBackground(new Color(255, 255, 255, 180));
+    }
+
     private JButton createButton(String text, Color background, Color foreground) {
         JButton button = new JButton(text);
         button.setFocusPainted(false);
@@ -155,7 +197,12 @@ public class MainFrame extends JFrame {
         button.setBackground(background);
         button.setForeground(foreground);
         button.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 13));
-        button.setBorder(new EmptyBorder(9, 16, 9, 16));
+        button.setPreferredSize(new Dimension(104, 38));
+        button.setMinimumSize(new Dimension(104, 38));
+        button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(226, 232, 240)),
+                new EmptyBorder(9, 14, 9, 14)
+        ));
         return button;
     }
 
@@ -174,7 +221,7 @@ public class MainFrame extends JFrame {
         label.setFont(new Font("Microsoft YaHei UI", Font.BOLD, 18));
         label.setForeground(new Color(17, 24, 39));
 
-        JLabel tip = new JLabel("自动保留每一轮问答记录", SwingConstants.RIGHT);
+        JLabel tip = new JLabel("自动保留每一轮问答记录，可在个人中心查看", SwingConstants.RIGHT);
         tip.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 12));
         tip.setForeground(new Color(100, 116, 139));
 
@@ -238,16 +285,21 @@ public class MainFrame extends JFrame {
 
     private void refreshSystemAudioStatus() {
         if (SystemAudioCaptureProviderFactory.hasNativeHelper()) {
-            audioStatusLabel.setText("音频: 内置采集已就绪 | 识别: 阿里云实时 ASR");
+            audioStatusLabel.setText("音频采集已就绪");
             audioStatusLabel.setForeground(new Color(22, 101, 52));
         } else {
-            audioStatusLabel.setText("音频: 未检测到内置采集组件 | 识别: 阿里云实时 ASR");
+            audioStatusLabel.setText("未检测到音频采集组件");
             audioStatusLabel.setForeground(new Color(185, 28, 28));
         }
     }
 
     private void onLoginOrLogout() {
         if (currentUserProfile != null) {
+            if (speechListenerService.isRunning()) {
+                JOptionPane.showMessageDialog(this, "请先结束面试，再退出登录。", "面试进行中", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
             int result = JOptionPane.showConfirmDialog(
                     this,
                     "确定要退出当前账号吗？",
@@ -257,11 +309,6 @@ public class MainFrame extends JFrame {
             );
             if (result != JOptionPane.YES_OPTION) {
                 return;
-            }
-            if (speechListenerService.isRunning()) {
-                speechListenerService.stop();
-                stopBillingTimer();
-                finishUsageSessionAsync();
             }
             backendClient.logout();
             currentUserProfile = null;
@@ -325,17 +372,22 @@ public class MainFrame extends JFrame {
 
     private void updateUserStatus() {
         if (currentUserProfile == null) {
-            userStatusLabel.setText("未登录");
-            userStatusLabel.setForeground(new Color(185, 28, 28));
             loginButton.setText("登录");
-            loginButton.setBackground(new Color(15, 23, 42));
+            loginButton.setBackground(new Color(248, 250, 252));
+            loginButton.setForeground(new Color(15, 23, 42));
+            loginButton.setToolTipText(null);
+            accountInfoLabel.setText("账号：未登录");
+            accountInfoLabel.setForeground(new Color(100, 116, 139));
             return;
         }
         int remainingSeconds = currentUserProfile.getRemainingSeconds();
-        userStatusLabel.setText(currentUserProfile.getPhone() + " · 剩余 " + formatDuration(remainingSeconds));
-        userStatusLabel.setForeground(currentUserProfile.getRemainingMinutes() > 0 ? new Color(22, 101, 52) : new Color(185, 28, 28));
-        loginButton.setText("退出登录");
-        loginButton.setBackground(new Color(107, 114, 128));
+        String accountText = currentUserProfile.getPhone() + " · 剩余 " + formatDuration(remainingSeconds);
+        loginButton.setText("已登录");
+        loginButton.setBackground(currentUserProfile.getRemainingMinutes() > 0 ? new Color(220, 252, 231) : new Color(254, 226, 226));
+        loginButton.setForeground(currentUserProfile.getRemainingMinutes() > 0 ? new Color(22, 101, 52) : new Color(153, 27, 27));
+        loginButton.setToolTipText(accountText);
+        accountInfoLabel.setText("账号：" + accountText);
+        accountInfoLabel.setForeground(currentUserProfile.getRemainingMinutes() > 0 ? new Color(22, 101, 52) : new Color(153, 27, 27));
     }
 
     private void refreshCurrentUserAsync() {
@@ -383,9 +435,14 @@ public class MainFrame extends JFrame {
                         return;
                     }
                     resumeText = text;
-                    resumeStatusLabel.setText("简历已导入");
-                    resumeStatusLabel.setForeground(new Color(22, 101, 52));
-                    statusLabel.setText("简历导入成功");
+                    String resumeName = selectedFile.getName();
+                    importResumeButton.setText("更新简历");
+                    importResumeButton.setBackground(new Color(220, 252, 231));
+                    importResumeButton.setForeground(new Color(22, 101, 52));
+                    importResumeButton.setToolTipText("当前简历: " + resumeName);
+                    resumeInfoLabel.setText("简历：" + resumeName);
+                    resumeInfoLabel.setForeground(new Color(22, 101, 52));
+                    statusLabel.setText("简历导入成功: " + resumeName);
                 } catch (Exception ex) {
                     statusLabel.setText("简历解析失败");
                     JOptionPane.showMessageDialog(MainFrame.this, "解析失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
@@ -395,6 +452,11 @@ public class MainFrame extends JFrame {
     }
 
     private void onAnalyze() {
+        if (!speechListenerService.isRunning()) {
+            JOptionPane.showMessageDialog(this, "请先开始面试，面试中才能使用手动补充。", "请先开始面试", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         JTextArea inputArea = new JTextArea(6, 28);
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
@@ -460,8 +522,10 @@ public class MainFrame extends JFrame {
         if (speechListenerService.isRunning()) {
             speechListenerService.stop();
             stopBillingTimer();
-            listenButton.setText("开始监听");
+            listenButton.setText("开始面试");
             listenButton.setBackground(new Color(22, 163, 74));
+            listenButton.setForeground(Color.WHITE);
+            updateAnalyzeButtonState();
             finishUsageSessionAsync();
             return;
         }
@@ -478,7 +542,7 @@ public class MainFrame extends JFrame {
 
         if (!SystemAudioCaptureProviderFactory.hasNativeHelper()) {
             JOptionPane.showMessageDialog(this,
-                    "未检测到内置系统音频采集组件，不能开始监听。\n\n请确认已打包：\nWindows: native/windows/wasapi-loopback-capture.exe\nmacOS: native/macos/system-audio-capture",
+                    "未检测到内置系统音频采集组件，不能开始面试。\n\n请确认已打包：\nWindows: native/windows/wasapi-loopback-capture.exe\nmacOS: native/macos/system-audio-capture",
                     "缺少音频采集组件",
                     JOptionPane.ERROR_MESSAGE);
             refreshSystemAudioStatus();
@@ -486,7 +550,7 @@ public class MainFrame extends JFrame {
         }
 
         listenButton.setEnabled(false);
-        statusLabel.setText("正在创建计费会话...");
+        statusLabel.setText("正在开始面试...");
         usageExecutor.submit(new Runnable() {
             @Override
             public void run() {
@@ -506,8 +570,8 @@ public class MainFrame extends JFrame {
                         @Override
                         public void run() {
                             listenButton.setEnabled(true);
-                            statusLabel.setText("创建计费会话失败");
-                            JOptionPane.showMessageDialog(MainFrame.this, "无法开始计费会话: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                            statusLabel.setText("开始面试失败");
+                            JOptionPane.showMessageDialog(MainFrame.this, "开始面试失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                         }
                     });
                 }
@@ -522,14 +586,19 @@ public class MainFrame extends JFrame {
                 SwingUtilities.invokeLater(new Runnable() {
                     @Override
                     public void run() {
-                        statusLabel.setText(text);
+                        String displayText = toUserFacingListeningStatus(text);
+                        if (!displayText.isEmpty()) {
+                            statusLabel.setText(displayText);
+                        }
                         if ("监听已停止".equals(text)) {
-                            listenButton.setText("开始监听");
+                            listenButton.setText("开始面试");
                             listenButton.setBackground(new Color(22, 163, 74));
                         } else if (text.startsWith("监听") || text.startsWith("正在使用")) {
-                            listenButton.setText("停止监听");
-                            listenButton.setBackground(new Color(220, 38, 38));
+                            listenButton.setText("结束面试");
+                            listenButton.setBackground(new Color(239, 68, 68));
+                            listenButton.setForeground(Color.WHITE);
                         }
+                        updateAnalyzeButtonState();
                     }
                 });
             }
@@ -559,9 +628,10 @@ public class MainFrame extends JFrame {
                 SwingUtilities.invokeLater(new Runnable() {
                     @Override
                     public void run() {
-                        listenButton.setText("开始监听");
+                        listenButton.setText("开始面试");
                         listenButton.setBackground(new Color(22, 163, 74));
-                        statusLabel.setText("监听失败");
+                        updateAnalyzeButtonState();
+                        statusLabel.setText("面试启动失败");
                         stopBillingTimer();
                         finishUsageSessionAsync();
                         JOptionPane.showMessageDialog(MainFrame.this, text, "错误", JOptionPane.ERROR_MESSAGE);
@@ -590,9 +660,11 @@ public class MainFrame extends JFrame {
         }
         int elapsedSeconds = (int) Math.max(0, (System.currentTimeMillis() - listeningStartedAtMillis) / 1000L);
         int liveRemainingSeconds = Math.max(0, remainingSecondsAtStart - elapsedSeconds);
-        userStatusLabel.setText(currentUserProfile.getPhone() + " · 剩余 " + formatDuration(liveRemainingSeconds));
-        userStatusLabel.setForeground(liveRemainingSeconds > 0 ? new Color(22, 101, 52) : new Color(185, 28, 28));
-        statusLabel.setText("监听计费中 · 已使用 " + formatDuration(elapsedSeconds) + " · 剩余 " + formatDuration(liveRemainingSeconds));
+        String accountText = currentUserProfile.getPhone() + " · 剩余 " + formatDuration(liveRemainingSeconds);
+        loginButton.setToolTipText(accountText);
+        accountInfoLabel.setText("账号：" + accountText);
+        accountInfoLabel.setForeground(liveRemainingSeconds > 0 ? new Color(22, 101, 52) : new Color(153, 27, 27));
+        statusLabel.setText("面试进行中 · 已使用 " + formatDuration(elapsedSeconds) + " · 剩余 " + formatDuration(liveRemainingSeconds));
         if (liveRemainingSeconds <= 0) {
             stopListeningBecauseBalanceExhausted();
         }
@@ -605,10 +677,11 @@ public class MainFrame extends JFrame {
         }
         stopBillingTimer();
         speechListenerService.stop();
-        listenButton.setText("开始监听");
+        listenButton.setText("开始面试");
         listenButton.setBackground(new Color(22, 163, 74));
-        statusLabel.setText("可用时长已用完，已自动停止监听");
-        JOptionPane.showMessageDialog(this, "可用时长已用完，已自动停止监听。请先购买时长后再继续使用。", "时长已用完", JOptionPane.WARNING_MESSAGE);
+        updateAnalyzeButtonState();
+        statusLabel.setText("可用时长已用完，已自动结束面试");
+        JOptionPane.showMessageDialog(this, "可用时长已用完，已自动结束面试。请先购买时长后再继续使用。", "时长已用完", JOptionPane.WARNING_MESSAGE);
         finishUsageSessionAsync();
     }
 
@@ -619,6 +692,28 @@ public class MainFrame extends JFrame {
         }
         listeningStartedAtMillis = 0L;
         remainingSecondsAtStart = 0;
+    }
+
+    private void updateAnalyzeButtonState() {
+        if (analyzeButton != null) {
+            boolean running = speechListenerService.isRunning();
+            analyzeButton.setEnabled(true);
+            analyzeButton.setBackground(running ? new Color(37, 99, 235) : new Color(239, 246, 255));
+            analyzeButton.setForeground(running ? Color.WHITE : new Color(37, 99, 235));
+        }
+    }
+
+    private String toUserFacingListeningStatus(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return "";
+        }
+        if ("监听已停止".equals(text)) {
+            return "面试已结束";
+        }
+        if (text.startsWith("监听") || text.startsWith("正在使用")) {
+            return "面试进行中";
+        }
+        return "";
     }
 
     private String formatDuration(int totalSeconds) {
@@ -633,6 +728,7 @@ public class MainFrame extends JFrame {
         if (sessionId == null || sessionId.trim().isEmpty()) {
             return;
         }
+        final boolean hasActiveInterview = speechListenerService.isRunning();
         activeUsageSessionId = "";
         usageExecutor.submit(new Runnable() {
             @Override
@@ -642,7 +738,9 @@ public class MainFrame extends JFrame {
                     SwingUtilities.invokeLater(new Runnable() {
                         @Override
                         public void run() {
-                            statusLabel.setText("本次使用已结算，扣费 " + formatDuration(session.getChargedSeconds()));
+                            if (!hasActiveInterview) {
+                                statusLabel.setText("面试已结束");
+                            }
                             refreshCurrentUserAsync();
                         }
                     });
@@ -650,8 +748,8 @@ public class MainFrame extends JFrame {
                     SwingUtilities.invokeLater(new Runnable() {
                         @Override
                         public void run() {
-                            statusLabel.setText("计费会话结算失败");
-                            JOptionPane.showMessageDialog(MainFrame.this, "计费会话结算失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                            statusLabel.setText("面试结束失败");
+                            JOptionPane.showMessageDialog(MainFrame.this, "结束面试失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                         }
                     });
                 }
@@ -702,7 +800,7 @@ public class MainFrame extends JFrame {
         empty.setAlignmentX(Component.LEFT_ALIGNMENT);
         empty.setMaximumSize(new Dimension(Integer.MAX_VALUE, 220));
 
-        JLabel label = new JLabel("开始监听后，这里会按顺序显示每一轮面试问答", JLabel.CENTER);
+        JLabel label = new JLabel("开始面试后，这里会按顺序显示每一轮面试问答", JLabel.CENTER);
         label.setFont(new Font("Microsoft YaHei UI", Font.PLAIN, 16));
         label.setForeground(new Color(107, 114, 128));
         empty.add(label, BorderLayout.CENTER);

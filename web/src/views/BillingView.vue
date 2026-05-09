@@ -38,7 +38,7 @@ async function handleCreateOrder(plan) {
       planId: plan.planId || plan.id,
       paymentChannel: 'WECHAT',
     });
-    successText.value = `订单 ${order.orderId || order.id} 已创建，可到订单中心模拟支付。`;
+    successText.value = '订单已创建，请继续完成支付。';
     router.push('/orders');
   } catch (error) {
     errorText.value = error.message;
@@ -74,7 +74,7 @@ onMounted(loadPlans);
           <li>支持订单、余额流水和使用记录追踪</li>
         </ul>
         <button class="primary-btn full" :disabled="Boolean(orderingPlan)" @click="handleCreateOrder(plan)">
-          {{ orderingPlan === (plan.planId || plan.id) ? '创建中...' : '创建订单' }}
+          {{ orderingPlan === (plan.planId || plan.id) ? '处理中...' : '购买' }}
         </button>
       </article>
     </div>

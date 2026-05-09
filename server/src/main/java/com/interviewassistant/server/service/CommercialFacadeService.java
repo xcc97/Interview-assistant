@@ -501,8 +501,33 @@ public class CommercialFacadeService {
             transactionSeconds(transaction),
             transaction.getSourceType(),
             transaction.getSourceId(),
+            resolveTransactionSourceName(transaction),
             format(transaction.getCreatedAt())
         );
+    }
+
+    private String resolveTransactionSourceName(BalanceTransaction transaction) {
+        if ("ORDER".equals(transaction.getSourceType())) {
+            return commercialOrderRepository.findById(transaction.getSourceId())
+                .map(order -> order.getPlanName() + "套餐")
+                .orElse("套餐订单");
+        }
+        if ("SESSION".equals(transaction.getSourceType())) {
+            return usageSessionRepository.findById(transaction.getSourceId())
+                .map(session -> sceneText(session.getScenario()))
+                .orElse("面试使用");
+        }
+        return null;
+    }
+
+    private String sceneText(String scenario) {
+        if ("INTERVIEW_ASSIST".equals(scenario) || "DESKTOP_INTERVIEW_ASSIST".equals(scenario)) {
+            return "实时面试辅助";
+        }
+        if ("MOCK_INTERVIEW".equals(scenario)) {
+            return "模拟面试练习";
+        }
+        return scenario == null || scenario.isBlank() ? "面试使用" : scenario;
     }
 
     private int transactionSeconds(BalanceTransaction transaction) {
@@ -515,8 +540,8 @@ public class CommercialFacadeService {
     private List<PlanResponse> fallbackPlans() {
         return List.of(
             new PlanResponse("trial-30", "新人试用包", 30, 7, new BigDecimal("9.90"), "适合快速体验核心功能", false),
-            new PlanResponse("boost-300", "求职冲刺包", 300, 30, new BigDecimal("99.00"), "适合面试密集阶段，主推套餐", true),
-            new PlanResponse("pro-800", "长期准备包", 800, 90, new BigDecimal("199.00"), "适合长期备战与多轮模拟", false)
+            new PlanResponse("boost-300", "求职冲刺包", 400, 30, new BigDecimal("99.00"), "适合面试密集阶段，主推套餐", true),
+            new PlanResponse("pro-800", "长期准备包", 1000, 90, new BigDecimal("199.00"), "适合长期备战与多轮模拟", false)
         );
     }
 

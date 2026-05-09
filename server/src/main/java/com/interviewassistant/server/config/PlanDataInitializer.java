@@ -26,8 +26,8 @@ public class PlanDataInitializer {
 
             repository.saveAll(List.of(
                 buildPlan("trial-30", "新人试用包", 30, 7, new BigDecimal("9.90"), "适合快速体验核心功能", false),
-                buildPlan("boost-300", "求职冲刺包", 300, 30, new BigDecimal("99.00"), "适合面试密集阶段，主推套餐", true),
-                buildPlan("pro-800", "长期准备包", 800, 90, new BigDecimal("199.00"), "适合长期备战与多轮模拟", false)
+                buildPlan("boost-300", "求职冲刺包", 400, 30, new BigDecimal("99.00"), "适合面试密集阶段，主推套餐", true),
+                buildPlan("pro-800", "长期准备包", 1000, 90, new BigDecimal("199.00"), "适合长期备战与多轮模拟", false)
             ));
         };
     }
@@ -52,6 +52,14 @@ public class PlanDataInitializer {
         for (CommercialPlan plan : plans) {
             if (plan.getStatus() == null || plan.getStatus().isBlank()) {
                 plan.setStatus("ACTIVE");
+                changed = true;
+            }
+            if ("boost-300".equals(plan.getCode()) && plan.getTotalMinutes() != 400) {
+                plan.setTotalMinutes(400);
+                changed = true;
+            }
+            if ("pro-800".equals(plan.getCode()) && plan.getTotalMinutes() != 1000) {
+                plan.setTotalMinutes(1000);
                 changed = true;
             }
         }
