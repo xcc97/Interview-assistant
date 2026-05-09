@@ -875,6 +875,11 @@ label {
   background: linear-gradient(180deg, rgba(237, 243, 255, 0.9), rgba(255, 255, 255, 0.92));
 }
 
+.windows-download-card {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: linear-gradient(180deg, rgba(240, 253, 244, 0.9), rgba(255, 255, 255, 0.92));
+}
+
 .usage-guide-card {
   margin-top: 18px;
 }

@@ -51,10 +51,9 @@ Output:
 
 ## Web download links
 
-The web download page currently exposes the macOS installer only:
+The web download page exposes both desktop installers:
 
-- `web/public/downloads/nod.dmg`
+- macOS: `web/public/downloads/nod.dmg`
+- Windows: `web/public/downloads/nod-windows-latest.msi`
 
-Windows is shown as "coming soon" until the MSI is verified and ready for release.
-
-After running the package scripts, rebuild/redeploy the web app so the files are served from `/downloads/...`.
+Before deploying the web app, make sure both files exist in `web/public/downloads/`. If the Windows MSI is missing, build it on Windows with `scripts/package-desktop.ps1`, then rebuild/redeploy the web app so the file is served from `/downloads/nod-windows-latest.msi`.

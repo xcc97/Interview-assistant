@@ -12,7 +12,11 @@ $OutputDir = Join-Path $RootDir "release\desktop"
 Set-Location $RootDir
 
 if (-not (Get-Command jpackage -ErrorAction SilentlyContinue)) {
-  throw "jpackage 未找到。请安装 JDK 21，并确认 JAVA_HOME\bin 在 PATH 中。"
+  throw "jpackage was not found. Please install JDK 21 and make sure JAVA_HOME\bin is in PATH."
+}
+
+if (-not (Get-Command candle.exe -ErrorAction SilentlyContinue) -or -not (Get-Command light.exe -ErrorAction SilentlyContinue)) {
+  throw "WiX Toolset was not found. Install WiX Toolset v3.x, then add its bin directory, such as C:\Program Files (x86)\WiX Toolset v3.14\bin, to PATH. jpackage needs candle.exe and light.exe to generate MSI installers."
 }
 
 mvn -q -DskipTests package
@@ -50,4 +54,4 @@ if ($BuiltMsi) {
   Copy-Item -Force $BuiltMsi.FullName (Join-Path $RootDir "web\public\downloads\nod-windows-latest.msi")
 }
 
-Write-Host "安装包已生成到：$OutputDir"
+Write-Host "Installer generated at: $OutputDir"
