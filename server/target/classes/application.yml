@@ -1,9 +1,25 @@
 server:
   port: ${SERVER_PORT:8080}
 
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/interview_assistant?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
 interview-assistant:
-  # 第一阶段 MVP 使用固定客户端密钥，正式上线前替换为用户登录 + JWT + 数据库订阅校验
+  # 兼容桌面端旧版本的固定客户端密钥；新 Web/商用接口使用 JWT。
   client-secret: ${INTERVIEW_ASSISTANT_CLIENT_SECRET:change-me-before-production}
+  jwt-secret: ${INTERVIEW_ASSISTANT_JWT_SECRET:change-this-jwt-secret-to-a-long-random-string-before-production}
+  jwt-expire-seconds: ${INTERVIEW_ASSISTANT_JWT_EXPIRE_SECONDS:7200}
+  admin-phones: ${INTERVIEW_ASSISTANT_ADMIN_PHONES:}
   aliyun:
     nls-app-key: ${ALIYUN_NLS_APP_KEY:}
     access-key-id: ${ALIYUN_ACCESS_KEY_ID:}
@@ -13,3 +29,27 @@ interview-assistant:
     api-key: ${BAILIAN_API_KEY:}
     model: ${BAILIAN_MODEL:deepseek-v3}
     endpoint: ${BAILIAN_ENDPOINT:https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions}
+  payment:
+    public-base-url: ${PAYMENT_PUBLIC_BASE_URL:http://localhost:8080}
+    mock-payment-enabled: ${PAYMENT_MOCK_ENABLED:false}
+    order-timeout-minutes: ${PAYMENT_ORDER_TIMEOUT_MINUTES:30}
+    order-maintenance-fixed-delay-ms: ${PAYMENT_ORDER_MAINTENANCE_FIXED_DELAY_MS:60000}
+    wechat:
+      enabled: ${WECHAT_PAY_ENABLED:false}
+      app-id: ${WECHAT_PAY_APP_ID:}
+      mch-id: ${WECHAT_PAY_MCH_ID:}
+      api-v3-key: ${WECHAT_PAY_API_V3_KEY:}
+      private-key-path: ${WECHAT_PAY_PRIVATE_KEY_PATH:}
+      private-cert-path: ${WECHAT_PAY_PRIVATE_CERT_PATH:}
+      cert-serial-no: ${WECHAT_PAY_CERT_SERIAL_NO:}
+      platform-cert-path: ${WECHAT_PAY_PLATFORM_CERT_PATH:}
+      callback-signature-required: ${WECHAT_PAY_CALLBACK_SIGNATURE_REQUIRED:true}
+      notify-path: ${WECHAT_PAY_NOTIFY_PATH:/api/payment/wechat/notify}
+    alipay:
+      enabled: ${ALIPAY_ENABLED:false}
+      app-id: ${ALIPAY_APP_ID:}
+      private-key: ${ALIPAY_PRIVATE_KEY:}
+      alipay-public-key: ${ALIPAY_PUBLIC_KEY:}
+      gateway-url: ${ALIPAY_GATEWAY_URL:https://openapi.alipay.com/gateway.do}
+      notify-path: ${ALIPAY_NOTIFY_PATH:/api/payment/alipay/notify}
+      return-url: ${ALIPAY_RETURN_URL:}

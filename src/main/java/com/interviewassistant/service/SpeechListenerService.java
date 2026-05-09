@@ -18,13 +18,19 @@ public class SpeechListenerService {
     }
 
     private final AppConfig config;
+    private final BackendClient backendClient;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private Thread worker;
     private PcmAudioCaptureProvider captureProvider;
     private AsrClient asrClient;
 
     public SpeechListenerService(AppConfig config) {
+        this(config, new BackendClient(config));
+    }
+
+    public SpeechListenerService(AppConfig config, BackendClient backendClient) {
         this.config = config;
+        this.backendClient = backendClient;
     }
 
     public boolean isRunning() {
@@ -150,7 +156,7 @@ public class SpeechListenerService {
     private AsrClient createAsrClient() throws IOException {
         String provider = config.getAsrProvider();
         if ("aliyun".equalsIgnoreCase(provider)) {
-            return new AliyunNlsAsrClient(config);
+            return new AliyunNlsAsrClient(config, backendClient);
         }
         throw new IOException("暂不支持的识别服务: " + provider + "，当前仅支持 aliyun");
     }

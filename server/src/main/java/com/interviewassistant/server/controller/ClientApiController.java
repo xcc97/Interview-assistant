@@ -7,6 +7,8 @@ import com.interviewassistant.server.dto.HealthResponse;
 import com.interviewassistant.server.service.AsrTokenService;
 import com.interviewassistant.server.service.BailianAnswerService;
 import com.interviewassistant.server.service.ClientAuthService;
+import com.interviewassistant.server.service.CurrentUserService;
+import com.interviewassistant.server.service.CommercialFacadeService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,13 +25,19 @@ public class ClientApiController {
     private final ClientAuthService clientAuthService;
     private final AsrTokenService asrTokenService;
     private final BailianAnswerService bailianAnswerService;
+    private final CommercialFacadeService commercialFacadeService;
+    private final CurrentUserService currentUserService;
 
     public ClientApiController(ClientAuthService clientAuthService,
                                AsrTokenService asrTokenService,
-                               BailianAnswerService bailianAnswerService) {
+                               BailianAnswerService bailianAnswerService,
+                               CommercialFacadeService commercialFacadeService,
+                               CurrentUserService currentUserService) {
         this.clientAuthService = clientAuthService;
         this.asrTokenService = asrTokenService;
         this.bailianAnswerService = bailianAnswerService;
+        this.commercialFacadeService = commercialFacadeService;
+        this.currentUserService = currentUserService;
     }
 
     @GetMapping("/health")
@@ -38,15 +46,23 @@ public class ClientApiController {
     }
 
     @PostMapping("/asr/token")
-    public AsrTokenResponse createAsrToken(@RequestHeader("X-Client-Secret") String clientSecret) throws Exception {
-        clientAuthService.verify(clientSecret);
+    public AsrTokenResponse createAsrToken(@RequestHeader(value = "X-Client-Secret", required = false) String clientSecret) throws Exception {
+        validateLegacySecretIfPresent(clientSecret);
+        commercialFacadeService.ensureUserCanUseCoreFeature(currentUserService.requireCurrentUserId());
         return asrTokenService.createToken();
     }
 
     @PostMapping("/interview/analyze")
-    public AnalyzeResponse analyze(@RequestHeader("X-Client-Secret") String clientSecret,
+    public AnalyzeResponse analyze(@RequestHeader(value = "X-Client-Secret", required = false) String clientSecret,
                                    @Valid @RequestBody AnalyzeRequest request) throws IOException {
-        clientAuthService.verify(clientSecret);
+        validateLegacySecretIfPresent(clientSecret);
+        commercialFacadeService.ensureUserCanUseCoreFeature(currentUserService.requireCurrentUserId());
         return bailianAnswerService.analyze(request);
+    }
+
+    private void validateLegacySecretIfPresent(String clientSecret) {
+        if (clientSecret != null && !clientSecret.isBlank()) {
+            clientAuthService.verify(clientSecret);
+        }
     }
 }

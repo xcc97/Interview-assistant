@@ -25,8 +25,12 @@ public class BailianDeepSeekClient {
     private final OkHttpClient httpClient;
 
     public BailianDeepSeekClient(AppConfig config) {
+        this(config, new BackendClient(config));
+    }
+
+    public BailianDeepSeekClient(AppConfig config, BackendClient backendClient) {
         this.config = config;
-        this.backendClient = new BackendClient(config);
+        this.backendClient = backendClient;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(Duration.ofSeconds(15))
                 .readTimeout(Duration.ofSeconds(45))

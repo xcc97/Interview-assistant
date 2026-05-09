@@ -69,6 +69,30 @@ public class AppConfig {
         return properties.getProperty("backend.clientSecret", "").trim();
     }
 
+    public String getBackendPhone() {
+        String fromEnv = System.getenv("INTERVIEW_ASSISTANT_BACKEND_PHONE");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
+        }
+        return properties.getProperty("backend.phone", "").trim();
+    }
+
+    public String getBackendPassword() {
+        String fromEnv = System.getenv("INTERVIEW_ASSISTANT_BACKEND_PASSWORD");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
+        }
+        return properties.getProperty("backend.password", "").trim();
+    }
+
+    public String getBackendAccessToken() {
+        String fromEnv = System.getenv("INTERVIEW_ASSISTANT_BACKEND_TOKEN");
+        if (fromEnv != null && !fromEnv.trim().isEmpty()) {
+            return fromEnv.trim();
+        }
+        return properties.getProperty("backend.accessToken", "").trim();
+    }
+
     public String getAsrProvider() {
         String fromEnv = System.getenv("ASR_PROVIDER");
         if (fromEnv != null && !fromEnv.trim().isEmpty()) {
@@ -202,6 +226,8 @@ public class AppConfig {
         sb.append("user.dir = ").append(System.getProperty("user.dir", "")).append('\n');
         sb.append("resolved.backendEnabled = ").append(isBackendEnabled()).append('\n');
         sb.append("resolved.backendBaseUrl = ").append(getBackendBaseUrl()).append('\n');
+        sb.append("resolved.backendPhone = ").append(maskValue(getBackendPhone())).append('\n');
+        sb.append("resolved.backendToken = ").append(maskValue(getBackendAccessToken())).append('\n');
         sb.append("resolved.asrProvider = ").append(getAsrProvider()).append('\n');
         sb.append("resolved.asrMixerName = ").append(getAsrMixerName()).append('\n');
         sb.append("resolved.aliyunNlsAppKey = ").append(maskValue(getAliyunNlsAppKey())).append('\n');

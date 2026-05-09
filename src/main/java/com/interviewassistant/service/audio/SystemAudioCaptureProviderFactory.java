@@ -38,6 +38,7 @@ public class SystemAudioCaptureProviderFactory {
 
     private static File resolveMacHelper() {
         return findExistingFile(
+                "native/macos/system-audio-capture/system-audio-capture",
                 "native/macos/system-audio-capture",
                 "native/macos/system-audio-capture/.build/release/system-audio-capture"
         );

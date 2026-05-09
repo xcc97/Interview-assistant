@@ -21,8 +21,12 @@ public class AliyunNlsAsrClient implements AsrClient {
     private final AtomicBoolean started = new AtomicBoolean(false);
 
     public AliyunNlsAsrClient(AppConfig config) {
+        this(config, new BackendClient(config));
+    }
+
+    public AliyunNlsAsrClient(AppConfig config, BackendClient backendClient) {
         this.config = config;
-        this.backendClient = new BackendClient(config);
+        this.backendClient = backendClient;
     }
 
     @Override
