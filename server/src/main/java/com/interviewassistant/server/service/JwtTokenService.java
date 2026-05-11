@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Date;
 
@@ -47,12 +48,37 @@ public class JwtTokenService {
 
     private SecretKey getSigningKey() {
         String secret = properties.getJwtSecret();
-        byte[] bytes;
-        try {
-            bytes = Decoders.BASE64.decode(secret);
-        } catch (IllegalArgumentException ex) {
+        byte[] bytes = decodeBase64SecretIfClearlyEncoded(secret);
+        if (bytes == null) {
             bytes = secret.getBytes(StandardCharsets.UTF_8);
         }
+        if (bytes.length < 32) {
+            bytes = sha256(bytes);
+        }
         return Keys.hmacShaKeyFor(bytes);
+    }
+
+    private byte[] decodeBase64SecretIfClearlyEncoded(String secret) {
+        String normalized = secret == null ? "" : secret.trim();
+        if (normalized.isEmpty() || normalized.length() % 4 != 0) {
+            return null;
+        }
+        if (!normalized.matches("^[A-Za-z0-9+/]+={0,2}$")) {
+            return null;
+        }
+        try {
+            byte[] decoded = Decoders.BASE64.decode(normalized);
+            return decoded.length >= 32 ? decoded : null;
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private byte[] sha256(byte[] bytes) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(bytes);
+        } catch (Exception ex) {
+            throw new IllegalStateException("SHA-256 algorithm is not available", ex);
+        }
     }
 }
