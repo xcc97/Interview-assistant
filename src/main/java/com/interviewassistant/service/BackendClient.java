@@ -165,6 +165,23 @@ public class BackendClient {
         }
     }
 
+    public void createInterviewRecord(String usageSessionId, String question, String answer) throws IOException {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("usageSessionId", usageSessionId == null ? "" : usageSessionId.trim());
+        payload.put("question", question == null ? "" : question.trim());
+        payload.put("answer", answer == null ? "" : answer.trim());
+        String body = OBJECT_MAPPER.writeValueAsString(payload);
+        Request request = authorizedRequest(config.getBackendBaseUrl() + "/api/client/interview/records")
+                .post(RequestBody.create(body, JSON))
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            String responseBody = response.body() == null ? "" : response.body().string();
+            if (!response.isSuccessful()) {
+                throw new IOException("保存面试记录失败: HTTP " + response.code() + " " + responseBody);
+            }
+        }
+    }
+
     private Request.Builder authorizedRequest(String url) throws IOException {
         Request.Builder builder = new Request.Builder()
                 .url(url)

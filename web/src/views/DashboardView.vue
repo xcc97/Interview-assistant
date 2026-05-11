@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { getBalanceTransactions, getOrders, getProfile, getUsageSessions } from '../api';
+import { getBalanceTransactions, getInterviewRecords, getOrders, getProfile, getUsageSessions } from '../api';
 import { useSessionStore } from '../stores/session';
 
 const session = useSessionStore();
@@ -8,9 +8,21 @@ const profile = ref(null);
 const transactions = ref([]);
 const orders = ref([]);
 const usageRecords = ref([]);
+const interviewRecords = ref([]);
 const loading = ref(false);
 const errorText = ref('');
 const showOpenClientHint = ref(false);
+
+const clientDownloadUrl = computed(() => {
+  const platform = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '';
+  const normalizedPlatform = platform.toLowerCase();
+  if (normalizedPlatform.includes('win')) {
+    return '/downloads/nod.msi';
+  }
+  return '/downloads/nod.dmg';
+});
+
+const clientInstallerName = computed(() => (clientDownloadUrl.value.endsWith('.msi') ? 'nod.msi' : 'nod.dmg'));
 
 const displayProfile = computed(() => profile.value || session.user || {});
 const quickCards = computed(() => [
@@ -114,16 +126,18 @@ async function loadDashboard() {
   loading.value = true;
   errorText.value = '';
   try {
-    const [profileResult, transactionResult, orderResult, usageResult] = await Promise.all([
+    const [profileResult, transactionResult, orderResult, usageResult, interviewRecordResult] = await Promise.all([
       getProfile(),
       getBalanceTransactions(),
       getOrders(),
       getUsageSessions(),
+      getInterviewRecords(),
     ]);
     profile.value = profileResult;
     transactions.value = transactionResult.slice(0, 5);
     orders.value = orderResult.slice(0, 5);
     usageRecords.value = usageResult.slice(0, 5);
+    interviewRecords.value = interviewRecordResult.slice(0, 10);
   } catch (error) {
     errorText.value = error.message;
   } finally {
@@ -162,8 +176,31 @@ onMounted(loadDashboard);
       </div>
       <div class="client-open-actions">
         <button class="primary-btn" @click="openClient">打开 nod 客户端</button>
-        <a v-if="showOpenClientHint" class="secondary-btn link-btn" href="/downloads/nod.dmg" download>没有打开？下载客户端</a>
+        <a v-if="showOpenClientHint" class="secondary-btn link-btn" :href="clientDownloadUrl" :download="clientInstallerName">没有打开？下载客户端</a>
       </div>
+    </article>
+
+    <article class="card interview-history-card">
+      <div class="card-title-row">
+        <div>
+          <h3>面试复习记录</h3>
+          <p class="compact-note">这里会保存桌面客户端每次识别到的面试官问题和生成答案，方便你面试后复盘。</p>
+        </div>
+      </div>
+      <div v-if="interviewRecords.length" class="interview-record-list">
+        <div v-for="record in interviewRecords" :key="record.id" class="interview-record-item">
+          <div class="record-time">{{ formatDateTime(record.createdAt) }}</div>
+          <div class="record-block question-block">
+            <strong>面试官问题</strong>
+            <p>{{ record.question }}</p>
+          </div>
+          <div class="record-block answer-block">
+            <strong>生成回答</strong>
+            <p>{{ record.answer }}</p>
+          </div>
+        </div>
+      </div>
+      <div v-else class="empty-state compact">暂无面试复习记录。使用桌面客户端生成回答后，会自动保存到这里。</div>
     </article>
 
     <div class="content-grid two-columns">

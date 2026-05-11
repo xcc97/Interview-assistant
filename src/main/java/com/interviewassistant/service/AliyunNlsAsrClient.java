@@ -9,16 +9,23 @@ import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
 
 import java.io.IOException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class AliyunNlsAsrClient implements AsrClient {
     private static final String DEFAULT_URL = "wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1";
+    private static final byte[] SILENCE_FRAME_100MS = new byte[3200];
 
     private final AppConfig config;
     private final BackendClient backendClient;
     private NlsClient nlsClient;
     private SpeechTranscriber transcriber;
+    private ScheduledExecutorService keepAliveExecutor;
     private final AtomicBoolean started = new AtomicBoolean(false);
+    private final AtomicLong lastRealAudioAtMillis = new AtomicLong(0L);
 
     public AliyunNlsAsrClient(AppConfig config) {
         this(config, new BackendClient(config));
@@ -65,7 +72,9 @@ public class AliyunNlsAsrClient implements AsrClient {
         transcriber.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
         transcriber.setEnableIntermediateResult(true);
         transcriber.start();
+        lastRealAudioAtMillis.set(System.currentTimeMillis());
         started.set(true);
+        startKeepAliveSilenceSender();
         listener.onStatus("阿里云实时语音识别已启动");
     }
 
@@ -74,6 +83,7 @@ public class AliyunNlsAsrClient implements AsrClient {
         if (!started.get() || transcriber == null || pcm16le == null || length <= 0) {
             return;
         }
+        lastRealAudioAtMillis.set(System.currentTimeMillis());
         if (length == pcm16le.length) {
             transcriber.send(pcm16le);
             return;
@@ -86,6 +96,7 @@ public class AliyunNlsAsrClient implements AsrClient {
     @Override
     public void close() {
         started.set(false);
+        stopKeepAliveSilenceSender();
         if (transcriber != null) {
             try {
                 transcriber.stop();
@@ -140,6 +151,43 @@ public class AliyunNlsAsrClient implements AsrClient {
                 listener.onError("阿里云实时识别失败: " + response.getStatusText());
             }
         };
+    }
+
+    private void startKeepAliveSilenceSender() {
+        stopKeepAliveSilenceSender();
+        keepAliveExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread thread = new Thread(r, "aliyun-nls-keepalive");
+            thread.setDaemon(true);
+            return thread;
+        });
+        keepAliveExecutor.scheduleAtFixedRate(() -> {
+            if (!started.get() || transcriber == null) {
+                return;
+            }
+            long quietMillis = System.currentTimeMillis() - lastRealAudioAtMillis.get();
+            if (quietMillis < 5000L) {
+                return;
+            }
+            try {
+                sendSilenceFrame();
+            } catch (Exception ignored) {
+                // The regular ASR listener/error path will surface connection failures.
+            }
+        }, 5, 5, TimeUnit.SECONDS);
+    }
+
+    private void sendSilenceFrame() throws IOException {
+        if (!started.get() || transcriber == null) {
+            return;
+        }
+        transcriber.send(SILENCE_FRAME_100MS);
+    }
+
+    private void stopKeepAliveSilenceSender() {
+        if (keepAliveExecutor != null) {
+            keepAliveExecutor.shutdownNow();
+            keepAliveExecutor = null;
+        }
     }
 
     private String createToken() throws IOException {

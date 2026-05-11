@@ -655,6 +655,57 @@ label {
   min-height: 120px;
 }
 
+.interview-history-card {
+  margin-bottom: 20px;
+}
+
+.interview-record-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.interview-record-item {
+  padding: 16px;
+  border: 1px solid #e6ebf4;
+  border-radius: 20px;
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.record-time {
+  margin-bottom: 12px;
+  color: #7a8497;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.record-block {
+  display: grid;
+  gap: 8px;
+}
+
+.record-block + .record-block {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed #d9e0ec;
+}
+
+.record-block strong {
+  color: #1f3d78;
+}
+
+.record-block p {
+  margin: 0;
+  color: #334155;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.answer-block p {
+  color: #182033;
+}
+
 .table-wrapper {
   overflow-x: auto;
 }

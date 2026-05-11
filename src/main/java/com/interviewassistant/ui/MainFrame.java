@@ -500,6 +500,7 @@ public class MainFrame extends JFrame {
                             entry.loading = false;
                             renderConversationCards();
                             statusLabel.setText("回答生成完成");
+                            saveInterviewRecordAsync(entry.question, entry.answer);
                         }
                     });
                 } catch (Exception ex) {
@@ -513,6 +514,23 @@ public class MainFrame extends JFrame {
                             JOptionPane.showMessageDialog(MainFrame.this, "调用失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
                         }
                     });
+                }
+            }
+        });
+    }
+
+    private void saveInterviewRecordAsync(String question, String answer) {
+        if (!config.isBackendEnabled() || question == null || question.trim().isEmpty() || answer == null || answer.trim().isEmpty()) {
+            return;
+        }
+        final String sessionId = activeUsageSessionId;
+        usageExecutor.submit(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    backendClient.createInterviewRecord(sessionId, question, answer);
+                } catch (Exception ex) {
+                    System.out.println("[INTERVIEW-RECORD] save failed: " + ex.getMessage());
                 }
             }
         });

@@ -8,6 +8,9 @@ $MainJar = "remote-interview-assistant-1.0.0.jar"
 $MainClass = "com.interviewassistant.Main"
 $InputDir = Join-Path $RootDir "target\installer\input"
 $OutputDir = Join-Path $RootDir "release\desktop"
+$WindowsIcon = Join-Path $RootDir "packaging\windows\nod.ico"
+$DownloadMsi = Join-Path $RootDir "web\public\downloads\nod.msi"
+$LegacyDownloadMsi = Join-Path $RootDir "web\public\downloads\nod-windows-latest.msi"
 
 Set-Location $RootDir
 
@@ -35,23 +38,34 @@ if (Test-Path $WindowsNativeExe) {
   Copy-Item -Force $WindowsNativeExe (Join-Path $InputDir "native\windows\wasapi-loopback-capture.exe")
 }
 
-jpackage `
-  --type msi `
-  --name $AppName `
-  --app-version $AppVersion `
-  --vendor "nod" `
-  --description $AppDisplayName `
-  --input $InputDir `
-  --main-jar $MainJar `
-  --main-class $MainClass `
-  --dest $OutputDir `
-  --win-menu `
-  --win-shortcut `
-  --java-options "-Dfile.encoding=UTF-8"
+$JPackageArgs = @(
+  "--type", "msi",
+  "--name", $AppName,
+  "--app-version", $AppVersion,
+  "--vendor", "nod",
+  "--description", $AppDisplayName,
+  "--input", $InputDir,
+  "--main-jar", $MainJar,
+  "--main-class", $MainClass,
+  "--dest", $OutputDir,
+  "--win-menu",
+  "--win-shortcut",
+  "--java-options", "-Dfile.encoding=UTF-8"
+)
 
-$BuiltMsi = Get-ChildItem -Path $OutputDir -Filter "*.msi" | Select-Object -First 1
+if (Test-Path $WindowsIcon) {
+  $JPackageArgs += @("--icon", $WindowsIcon)
+}
+
+jpackage @JPackageArgs
+
+$BuiltMsi = Get-ChildItem -Path $OutputDir -Filter "*.msi" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($BuiltMsi) {
-  Copy-Item -Force $BuiltMsi.FullName (Join-Path $RootDir "web\public\downloads\nod-windows-latest.msi")
+  Copy-Item -Force $BuiltMsi.FullName $DownloadMsi
+  if (Test-Path $LegacyDownloadMsi) {
+    Remove-Item -Force $LegacyDownloadMsi
+  }
 }
 
 Write-Host "Installer generated at: $OutputDir"
+Write-Host "Download MSI copied to: $DownloadMsi"

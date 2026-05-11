@@ -4,11 +4,14 @@ import com.interviewassistant.server.dto.AnalyzeRequest;
 import com.interviewassistant.server.dto.AnalyzeResponse;
 import com.interviewassistant.server.dto.AsrTokenResponse;
 import com.interviewassistant.server.dto.HealthResponse;
+import com.interviewassistant.server.dto.InterviewRecordRequest;
+import com.interviewassistant.server.dto.InterviewRecordResponse;
 import com.interviewassistant.server.service.AsrTokenService;
 import com.interviewassistant.server.service.BailianAnswerService;
 import com.interviewassistant.server.service.ClientAuthService;
 import com.interviewassistant.server.service.CurrentUserService;
 import com.interviewassistant.server.service.CommercialFacadeService;
+import com.interviewassistant.server.service.InterviewRecordService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,17 +30,20 @@ public class ClientApiController {
     private final BailianAnswerService bailianAnswerService;
     private final CommercialFacadeService commercialFacadeService;
     private final CurrentUserService currentUserService;
+    private final InterviewRecordService interviewRecordService;
 
     public ClientApiController(ClientAuthService clientAuthService,
                                AsrTokenService asrTokenService,
                                BailianAnswerService bailianAnswerService,
                                CommercialFacadeService commercialFacadeService,
-                               CurrentUserService currentUserService) {
+                               CurrentUserService currentUserService,
+                               InterviewRecordService interviewRecordService) {
         this.clientAuthService = clientAuthService;
         this.asrTokenService = asrTokenService;
         this.bailianAnswerService = bailianAnswerService;
         this.commercialFacadeService = commercialFacadeService;
         this.currentUserService = currentUserService;
+        this.interviewRecordService = interviewRecordService;
     }
 
     @GetMapping("/health")
@@ -58,6 +64,13 @@ public class ClientApiController {
         validateLegacySecretIfPresent(clientSecret);
         commercialFacadeService.ensureUserCanUseCoreFeature(currentUserService.requireCurrentUserId());
         return bailianAnswerService.analyze(request);
+    }
+
+    @PostMapping("/interview/records")
+    public InterviewRecordResponse createInterviewRecord(@RequestHeader(value = "X-Client-Secret", required = false) String clientSecret,
+                                                         @Valid @RequestBody InterviewRecordRequest request) {
+        validateLegacySecretIfPresent(clientSecret);
+        return interviewRecordService.create(currentUserService.requireCurrentUserId(), request);
     }
 
     private void validateLegacySecretIfPresent(String clientSecret) {

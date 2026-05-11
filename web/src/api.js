@@ -115,6 +115,12 @@ export async function getUsageSessions() {
   });
 }
 
+export async function getInterviewRecords() {
+  return request('/api/interview/records', {
+    method: 'GET',
+  });
+}
+
 export async function getBalanceTransactions() {
   return request('/api/balance/transactions', {
     method: 'GET',

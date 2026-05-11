@@ -21,6 +21,7 @@ com\interviewassistant\server\dto\AsrTokenResponse.class
 com\interviewassistant\server\service\JwtTokenService.class
 com\interviewassistant\server\dto\PaymentCreateResponse.class
 com\interviewassistant\server\config\AssistantProperties.class
+com\interviewassistant\server\repository\InterviewRecordRepository.class
 com\interviewassistant\server\dto\FinishUsageSessionRequest.class
 com\interviewassistant\server\dto\StartUsageSessionRequest.class
 com\interviewassistant\server\config\SecurityConfig$JwtAuthenticationFilter.class
@@ -28,15 +29,19 @@ com\interviewassistant\server\entity\UserAccount.class
 com\interviewassistant\server\entity\CommercialPlan.class
 com\interviewassistant\server\controller\AuthController.class
 com\interviewassistant\server\service\BailianAnswerService.class
+com\interviewassistant\server\entity\InterviewRecord.class
 com\interviewassistant\server\repository\CommercialOrderRepository.class
+com\interviewassistant\server\service\InterviewRecordService.class
 com\interviewassistant\server\dto\AuthResponse.class
 com\interviewassistant\server\config\PropertiesConfig.class
 com\interviewassistant\server\entity\CommercialOrder.class
 com\interviewassistant\server\InterviewAssistantServerApplication.class
 com\interviewassistant\server\dto\OrderResponse.class
 com\interviewassistant\server\dto\CreatePaymentRequest.class
+com\interviewassistant\server\dto\InterviewRecordResponse.class
 com\interviewassistant\server\service\PaymentService.class
 com\interviewassistant\server\repository\CommercialPlanRepository.class
+com\interviewassistant\server\dto\InterviewRecordRequest.class
 com\interviewassistant\server\dto\BalanceTransactionResponse.class
 com\interviewassistant\server\repository\UsageSessionRepository.class
 com\interviewassistant\server\repository\UserAccountRepository.class

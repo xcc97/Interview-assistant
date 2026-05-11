@@ -20,6 +20,8 @@ D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\Cre
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\FinishUsageSessionRequest.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\HealthResponse.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\HeartbeatUsageSessionRequest.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\InterviewRecordRequest.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\InterviewRecordResponse.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\LoginRequest.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\MockPaymentCallbackRequest.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\OrderResponse.java
@@ -36,6 +38,7 @@ D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\Use
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\entity\BalanceTransaction.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\entity\CommercialOrder.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\entity\CommercialPlan.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\entity\InterviewRecord.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\entity\PaymentCallbackLog.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\entity\UsageSession.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\entity\UserAccount.java
@@ -43,6 +46,7 @@ D:\面试助手项目\server\src\main\java\com\interviewassistant\server\Intervi
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\repository\BalanceTransactionRepository.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\repository\CommercialOrderRepository.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\repository\CommercialPlanRepository.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\repository\InterviewRecordRepository.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\repository\PaymentCallbackLogRepository.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\repository\UsageSessionRepository.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\repository\UserAccountRepository.java
@@ -51,6 +55,7 @@ D:\面试助手项目\server\src\main\java\com\interviewassistant\server\service
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\service\ClientAuthService.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\service\CommercialFacadeService.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\service\CurrentUserService.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\service\InterviewRecordService.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\service\JwtTokenService.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\service\PaymentCallbackLogService.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\service\PaymentService.java

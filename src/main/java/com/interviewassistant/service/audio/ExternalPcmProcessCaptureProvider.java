@@ -82,7 +82,7 @@ public class ExternalPcmProcessCaptureProvider implements PcmAudioCaptureProvide
             role = System.getenv("INTERVIEW_ASSISTANT_WASAPI_ROLE");
         }
         if (role == null || role.trim().isEmpty()) {
-            return "console";
+            return "communications";
         }
         String normalized = role.trim().toLowerCase();
         if ("communications".equals(normalized) || "communication".equals(normalized) || "comm".equals(normalized)) {

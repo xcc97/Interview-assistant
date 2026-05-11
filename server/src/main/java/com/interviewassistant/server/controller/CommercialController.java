@@ -5,6 +5,7 @@ import com.interviewassistant.server.dto.BalanceTransactionResponse;
 import com.interviewassistant.server.dto.CreateOrderRequest;
 import com.interviewassistant.server.dto.CreatePaymentRequest;
 import com.interviewassistant.server.dto.FinishUsageSessionRequest;
+import com.interviewassistant.server.dto.InterviewRecordResponse;
 import com.interviewassistant.server.dto.MockPaymentCallbackRequest;
 import com.interviewassistant.server.dto.OrderResponse;
 import com.interviewassistant.server.dto.PaymentCreateResponse;
@@ -15,6 +16,7 @@ import com.interviewassistant.server.dto.UsageSessionResponse;
 import com.interviewassistant.server.dto.UserProfileResponse;
 import com.interviewassistant.server.service.CommercialFacadeService;
 import com.interviewassistant.server.service.CurrentUserService;
+import com.interviewassistant.server.service.InterviewRecordService;
 import com.interviewassistant.server.service.PaymentCallbackLogService;
 import com.interviewassistant.server.service.PaymentService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,17 +42,20 @@ public class CommercialController {
     private final CurrentUserService currentUserService;
     private final PaymentService paymentService;
     private final PaymentCallbackLogService paymentCallbackLogService;
+    private final InterviewRecordService interviewRecordService;
     private final AssistantProperties assistantProperties;
 
     public CommercialController(CommercialFacadeService commercialFacadeService,
                                 CurrentUserService currentUserService,
                                 PaymentService paymentService,
                                 PaymentCallbackLogService paymentCallbackLogService,
+                                InterviewRecordService interviewRecordService,
                                 AssistantProperties assistantProperties) {
         this.commercialFacadeService = commercialFacadeService;
         this.currentUserService = currentUserService;
         this.paymentService = paymentService;
         this.paymentCallbackLogService = paymentCallbackLogService;
+        this.interviewRecordService = interviewRecordService;
         this.assistantProperties = assistantProperties;
     }
 
@@ -140,6 +145,11 @@ public class CommercialController {
     @GetMapping("/usage")
     public List<UsageSessionResponse> listUsageSessions() {
         return commercialFacadeService.listUsageSessions(currentUserService.requireCurrentUserId());
+    }
+
+    @GetMapping("/interview/records")
+    public List<InterviewRecordResponse> listInterviewRecords() {
+        return interviewRecordService.listRecent(currentUserService.requireCurrentUserId());
     }
 
     @PostMapping("/usage/finish")
