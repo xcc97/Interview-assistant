@@ -1,4 +1,5 @@
 <script setup>
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { RouterLink } from 'vue-router';
 
 const demoMoments = [
@@ -52,11 +53,60 @@ const demoMoments = [
   }
 ];
 
+const activeDemoIndex = ref(0);
+const demoSlideMs = 4800;
+let demoTimer;
+
+const activeDemo = computed(() => demoMoments[activeDemoIndex.value]);
+
+onMounted(() => {
+  demoTimer = window.setInterval(() => {
+    activeDemoIndex.value = (activeDemoIndex.value + 1) % demoMoments.length;
+  }, demoSlideMs);
+});
+
+onUnmounted(() => {
+  if (demoTimer) window.clearInterval(demoTimer);
+});
+
 const steps = [
   { title: '导入简历', desc: '让回答贴合你的项目经历和岗位方向。' },
   { title: '开始面试', desc: '客户端实时识别面试官问题，自动生成答题思路。' },
   { title: '照着结构表达', desc: '按背景、行动、结果、复盘组织语言，不再临场卡壳。' },
 ];
+
+const faqItems = [
+  {
+    q: 'nod 是做什么的？',
+    a: 'nod 是面试时的表达助手：在你参加远程面试时，听清面试官的问题，结合你导入的简历与岗位方向，整理成有结构的回答要点，方便你用自己的话顺畅说出来。',
+  },
+  {
+    q: '和「替考」或自动答题有什么区别？',
+    a: 'nod 不会代替你作答，也不会替你出声。它提供的是听题理解、回答结构和关键信息提示，最终怎么说、说到什么深度，仍由你本人完成。',
+  },
+  {
+    q: '怎么计费？余额怎么查？',
+    a: '按使用时长（分钟）计费。购买套餐后额度会到账，可在个人中心查看剩余分钟数与使用记录，具体价格以套餐页说明为准。',
+  },
+  {
+    q: '我的简历和面试内容安全吗？',
+    a: '我们按隐私政策处理你上传的简历与使用数据。建议你阅读站内《隐私政策》了解收集范围、用途与保存方式；如有疑问可通过「联系我们」沟通。',
+  },
+  {
+    q: '支持哪些设备或会议软件？',
+    a: '请从下载页安装 nod 客户端，并在本机完成麦克风和系统权限配置。常见远程会议软件一般可与本机音频配合使用，具体以客户端内说明与实测为准。',
+  },
+  {
+    q: '遇到问题怎么反馈？',
+    a: '可通过页脚「联系我们」提交问题或建议。若涉及订单与退款，也可查阅《退款说明》或用户在个人中心的相关入口。',
+  },
+];
+
+const openFaqIndex = ref(null);
+
+function toggleFaq(index) {
+  openFaqIndex.value = openFaqIndex.value === index ? null : index;
+}
 
 </script>
 
@@ -66,7 +116,7 @@ const steps = [
       <div class="cinematic-copy">
         <p class="eyebrow">效果演示</p>
         <h2>几秒钟看懂 nod 如何工作</h2>
-        <p>模拟真实远程面试：面试官连续提问，nod 自动识别问题，并在右侧生成可直接表达的口语化回答。</p>
+        <p>在真实远程面试里，面试官连续提问时，nod 会实时听清问题，并在右侧整理成可直接照着说的口语化回答。</p>
         <div class="cinematic-actions">
           <RouterLink class="primary-btn link-btn" to="/download">下载客户端</RouterLink>
           <RouterLink class="secondary-btn link-btn" to="/billing">查看套餐</RouterLink>
@@ -84,28 +134,42 @@ const steps = [
           <div class="interviewer-panel">
             <div class="panel-label">面试官声音识别</div>
             <div class="waveform" aria-hidden="true">
-              <span v-for="index in 28" :key="index"></span>
+              <span v-for="index in 20" :key="index"></span>
             </div>
             <div class="question-feed">
-              <div v-for="moment in demoMoments" :key="moment.time" class="question-cue">
-                <small>{{ moment.time }} · {{ moment.speaker }}</small>
-                <p>{{ moment.question }}</p>
-              </div>
+              <Transition name="demo-slide" mode="out-in">
+                <div :key="activeDemo.time" class="question-cue">
+                  <small>{{ activeDemo.time }} · {{ activeDemo.speaker }}</small>
+                  <p>{{ activeDemo.question }}</p>
+                </div>
+              </Transition>
             </div>
           </div>
 
           <div class="answer-panel">
             <div class="panel-label">生成的口语化回答</div>
             <div class="answer-feed">
-              <div v-for="moment in demoMoments" :key="moment.question" class="answer-cue">
-                <small>已生成回答</small>
-                <p>{{ moment.answer }}</p>
-              </div>
+              <Transition name="demo-slide" mode="out-in">
+                <div :key="activeDemo.question" class="answer-cue">
+                  <small>已生成回答</small>
+                  <p>{{ activeDemo.answer }}</p>
+                </div>
+              </Transition>
             </div>
           </div>
         </div>
 
-        <div class="video-progress"><span></span></div>
+        <div class="demo-slide-dots" aria-hidden="true">
+          <span
+            v-for="(_, i) in demoMoments"
+            :key="i"
+            :class="{ active: i === activeDemoIndex }"
+          ></span>
+        </div>
+
+        <div class="video-progress" :key="activeDemoIndex">
+          <span></span>
+        </div>
       </div>
     </div>
   </section>
@@ -202,6 +266,45 @@ const steps = [
         <strong>按分钟计费</strong>
         <p>套餐购买后自动到账，使用记录和余额变化都可查看。</p>
       </article>
+    </div>
+  </section>
+
+  <section id="faq" class="page-section faq-section" aria-labelledby="faq-heading">
+    <div class="faq-slab">
+      <div class="faq-heading-block">
+        <p class="eyebrow">常见问题</p>
+        <h2 id="faq-heading" class="faq-section-title">FAQs</h2>
+        <p class="faq-section-lead">计费、隐私、客户端与使用前你可能想先确认的几件事。</p>
+      </div>
+      <div class="faq-accordion">
+        <div
+          v-for="(item, index) in faqItems"
+          :key="item.q"
+          class="faq-item"
+          :class="{ open: openFaqIndex === index }"
+        >
+          <button
+            type="button"
+            class="faq-trigger"
+            :aria-expanded="openFaqIndex === index"
+            :aria-controls="`faq-panel-${index}`"
+            :id="`faq-trigger-${index}`"
+            @click="toggleFaq(index)"
+          >
+            <span class="faq-question-text">{{ item.q }}</span>
+            <span class="faq-chevron" aria-hidden="true"></span>
+          </button>
+          <div
+            v-show="openFaqIndex === index"
+            :id="`faq-panel-${index}`"
+            class="faq-panel"
+            role="region"
+            :aria-labelledby="`faq-trigger-${index}`"
+          >
+            <p>{{ item.a }}</p>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 </template>
