@@ -1,59 +1,56 @@
 <script setup>
-import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 
-const isAnalyzing = ref(false);
-const answer = ref('');
-const form = ref({
-  question: '请介绍一下你在项目里如何做性能优化？',
-});
-
-const examples = [
-  '请介绍一个你主导过的项目，并说明你的贡献。',
-  '你遇到过最复杂的线上问题是什么，最后怎么解决的？',
-  '如果接口响应突然变慢，你会如何排查？',
-];
-
-const previewAnswers = {
-  '请介绍一下你在项目里如何做性能优化？': `可以。我之前做性能优化时，一般不会一上来就直接改代码，而是先把问题量化清楚。
+const demoMoments = [
+  {
+    time: '00:03',
+    speaker: '面试官 01',
+    question: '请介绍一下你在项目里如何做性能优化？',
+    answer: `可以。我之前做性能优化时，一般不会一上来就直接改代码，而是先把问题量化清楚。
 
 比如我在一个业务系统里遇到过接口响应变慢的问题，当时用户侧感知比较明显，核心接口高峰期会从几百毫秒涨到 2 秒以上。我的处理思路是先用日志、链路追踪和慢查询把耗时拆开，看时间到底花在数据库、外部接口，还是应用内部逻辑上。
 
-定位后发现主要有三类问题：第一是部分查询没有命中合适索引；第二是列表页一次性加载了过多非必要字段；第三是有些结果其实短时间内变化不大，但每次请求都重新计算。
+定位后我主要做了三件事：第一，优化 SQL 和索引，把高频查询的扫描行数降下来；第二，对接口返回做裁剪和分页，避免一次拉太多非必要字段；第三，把读多写少的数据放到缓存里，并设置合理的过期和更新策略。
 
-所以我做了几件事：先优化 SQL 和索引，把高频查询的扫描行数降下来；然后对接口返回做裁剪和分页，避免一次拉太多数据；最后把一些读多写少的数据放到缓存里，并且设置合理的过期时间和更新策略。对于峰值流量，我也补了限流和降级方案，避免个别慢接口拖垮整体服务。
+最后核心接口平均响应时间降到 300 毫秒以内。我的复盘是，性能优化最重要的不是堆技术，而是先定位瓶颈，再用数据证明优化有效。`
+  },
+  {
+    time: '00:08',
+    speaker: '面试官 02',
+    question: '你遇到过最复杂的线上问题是什么？',
+    answer: `我遇到过一个比较复杂的线上问题，是活动期间订单状态偶发不一致。用户反馈是支付成功了，但页面还显示未支付，而且不是每次都复现。
 
-最后效果是核心接口的平均响应时间从 1 秒多降到 300 毫秒以内，高峰期也比较稳定。我的复盘是，性能优化最重要的不是“用了什么技术”，而是先定位瓶颈，再针对性处理，并且用数据证明优化确实有效。`,
-  '请介绍一个你主导过的项目，并说明你的贡献。': `可以。我之前主导过一个内部业务管理系统的重构项目，背景是老系统功能堆得比较多，页面响应慢，代码也比较难维护，新需求上线经常会影响到旧功能。
+我当时先做了两件事：第一是止血，先让客服和运营有人工核对方案，避免影响用户权益；第二是把问题订单拉出来，把支付回调、订单更新、消息队列消费和前端查询这几条链路的日志串起来看。
 
-我在这个项目里的主要贡献有三块。第一是前期梳理，我和产品、运营一起把核心流程重新过了一遍，把真正高频的功能和历史遗留功能拆开，避免重构变成简单地“照搬一遍”。
+最后发现根因不是支付失败，而是高峰期消息消费有延迟，加上前端短时间内读到了旧状态。解决时，我先给前端加了处理中提示和短轮询，后端优化了消费并发和失败重试，同时对订单状态变更做了幂等保护。
 
-第二是技术方案设计。我把原来比较耦合的模块拆成了更清晰的业务域，比如订单、用户、权限和数据看板，每个模块边界更明确。同时在前端也做了组件拆分，让表单、列表、筛选这些通用能力可以复用。
+这个问题让我印象比较深，因为它不是单点 bug，而是链路时序问题。我的经验是，复杂线上问题要先串完整链路，再判断是数据问题、时序问题还是展示问题。`
+  },
+  {
+    time: '00:14',
+    speaker: '面试官 03',
+    question: '如果接口突然变慢，你会怎么排查？',
+    answer: `如果接口突然变慢，我不会马上猜原因，而是先确认影响范围。
 
-第三是落地推进。我没有一次性大爆炸上线，而是按模块灰度迁移，先迁移低风险功能，再逐步切核心流程。过程中我也补了关键接口监控和回滚方案，确保出现问题能快速定位和恢复。
+第一，我会看监控指标，确认是所有接口都慢，还是某几个接口慢；是所有用户都慢，还是某个地区、某类请求慢。同时看 QPS、错误率、CPU、内存、数据库连接数这些基础指标有没有异常。
 
-最后这个项目上线后，新需求开发效率明显提升，之前一个中等需求可能要三四天，现在基本一两天就能完成；页面加载速度也有比较明显改善。对我来说，这个项目最大的价值不是单纯完成重构，而是让系统后续更容易迭代，团队维护成本也降了下来。`,
-  '你遇到过最复杂的线上问题是什么，最后怎么解决的？': `我遇到过一个比较复杂的线上问题，是某次活动期间订单状态偶发不一致。麻烦的地方在于它不是必现问题，用户反馈是“有时支付成功了，但页面还显示未支付”，而且重试后又可能恢复正常。
+第二，我会拆链路耗时，把一次请求分成网关、应用服务、数据库、缓存、第三方接口几段。如果有链路追踪工具，就直接看 trace；没有的话，我会临时加关键日志，把每一段耗时打出来。
 
-我当时先做了两件事：第一是止血，先让客服和运营有一个人工核对方案，避免影响用户权益；第二是拉取问题订单，把支付回调、订单更新、消息队列消费和前端查询这几条链路的日志串起来看。
+第三，再根据瓶颈处理。如果是数据库，就看慢 SQL、执行计划和索引；如果是应用层，就看线程池、锁竞争和 GC；如果是外部依赖，就考虑超时、降级和缓存兜底。处理上我会先止血，再做根因修复。`
+  },
+  {
+    time: '00:20',
+    speaker: '面试官 04',
+    question: '你在团队协作里通常承担什么角色？',
+    answer: `我在团队里通常更偏推进和兜底型角色，不只是完成自己手上的任务，也会关注上下游协作有没有卡点。
 
-排查后发现，根因不是支付本身失败，而是高峰期消息消费有延迟，加上前端查询读到了短暂的旧状态，导致用户看到状态不一致。这个问题跨了支付回调、异步消息、缓存和前端展示，所以一开始看起来比较乱。
+比如接到一个需求后，我会先和产品确认目标、边界和优先级，避免大家理解不一致。然后我会把技术方案拆成几个阶段，提前和前端、测试、后端同学对齐接口、数据结构和风险点。
 
-解决上，我先调整了订单状态查询逻辑：对于刚支付完成的订单，前端增加短时间轮询和更明确的处理中提示，避免直接展示误导状态。后端则优化了消息消费的并发和失败重试，同时对关键状态变更做了幂等保护，避免重复回调造成脏数据。
+落地过程中，我会比较关注两个事情。第一是节奏，如果某个依赖有延期风险，我会尽早同步出来，而不是等到最后一天才暴露。第二是质量，核心链路我会补好日志、异常处理和回滚方案，确保上线后可观测、可恢复。
 
-最终问题稳定解决后，我又补了订单状态延迟的监控，比如支付成功到订单完成的耗时分布，一旦超过阈值就告警。我的经验是，复杂线上问题不能只盯一个点，要先把完整链路串起来，再判断是数据问题、时序问题还是用户展示问题。`,
-  '如果接口响应突然变慢，你会如何排查？': `如果接口突然变慢，我会先确认影响范围，而不是马上猜原因。
-
-第一步，我会看监控指标，比如是所有接口都慢，还是某几个接口慢；是所有用户都慢，还是某个地区、某类请求慢。同时看 QPS、错误率、CPU、内存、数据库连接数这些基础指标有没有异常。
-
-第二步，我会看链路耗时，把一次请求拆成几个阶段：网关、应用服务、数据库、缓存、第三方接口。这样能快速判断时间主要耗在哪一段。如果有链路追踪工具，就直接看 trace；没有的话，就临时加关键日志，把耗时打出来。
-
-第三步，如果定位到数据库，我会看慢 SQL、执行计划、索引命中情况，以及是不是数据量突然变大。如果定位到应用层，我会看是否有锁竞争、线程池打满、GC 频繁，或者最近是否上线了新代码。如果是外部依赖慢，就要看是否需要超时控制、降级或缓存兜底。
-
-处理上我会分两步：先止血，比如限流、降级、扩容、回滚或者临时缓存；再做根因修复，比如优化 SQL、拆分逻辑、调整线程池或完善异步处理。
-
-我觉得排查慢接口最关键的是有顺序：先看范围，再看链路，再看具体瓶颈。这样不会陷入凭感觉排查，也能更快恢复线上稳定性。`,
-};
+所以我的定位不是单纯写代码，而是把事情稳定推进到上线，并且让团队协作成本尽量低。`
+  }
+];
 
 const steps = [
   { title: '导入简历', desc: '让回答贴合你的项目经历和岗位方向。' },
@@ -61,64 +58,56 @@ const steps = [
   { title: '照着结构表达', desc: '按背景、行动、结果、复盘组织语言，不再临场卡壳。' },
 ];
 
-function useExample(question) {
-  form.value.question = question;
-  answer.value = '';
-}
-
-function handleAnalyze() {
-  isAnalyzing.value = true;
-  window.setTimeout(() => {
-    answer.value = previewAnswers[form.value.question] || previewAnswers['请介绍一下你在项目里如何做性能优化？'];
-    isAnalyzing.value = false;
-  }, 300);
-}
 </script>
 
 <template>
-  <section id="try" class="page-section try-section">
-    <div class="page-heading center-heading">
-      <p class="eyebrow">Try nod</p>
-      <h2>先用一个真实问题体验效果</h2>
-      <p>客户端会实时监听并识别面试官问题，这里先用几个典型问题展示 nod 的回答质量和表达风格。</p>
-    </div>
-
-    <div class="content-grid two-columns demo-grid embedded-demo-grid">
-      <article class="card analyzer-card">
-        <div class="card-title-row">
-          <h3>面试官问题</h3>
-          <span>客户端实时识别</span>
+  <section id="try" class="page-section cinematic-demo-section">
+    <div class="cinematic-demo-shell">
+      <div class="cinematic-copy">
+        <p class="eyebrow">效果演示</p>
+        <h2>几秒钟看懂 nod 如何工作</h2>
+        <p>模拟真实远程面试：面试官连续提问，nod 自动识别问题，并在右侧生成可直接表达的口语化回答。</p>
+        <div class="cinematic-actions">
+          <RouterLink class="primary-btn link-btn" to="/download">下载客户端</RouterLink>
+          <RouterLink class="secondary-btn link-btn" to="/billing">查看套餐</RouterLink>
         </div>
-        <label>
-          客户端会在面试中自动听取并识别面试官所有问题
-          <textarea v-model="form.question" rows="5" readonly></textarea>
-        </label>
-        <button class="primary-btn full" :disabled="isAnalyzing" @click="handleAnalyze">
-          {{ isAnalyzing ? '生成中...' : '查看回答示例' }}
-        </button>
-      </article>
-
-      <article class="card answer-card">
-        <div class="card-title-row">
-          <h3>回答示例</h3>
-          <span>口语化表达</span>
-        </div>
-        <div v-if="answer" class="answer-content">{{ answer }}</div>
-        <div v-else class="empty-state demo-empty-state">
-          <strong>点击左侧按钮查看示例答案</strong>
-          <p>你会看到一段更接近真实面试表达的口语化回答。</p>
-        </div>
-      </article>
-    </div>
-
-    <article class="card demo-examples-card compact-example-card">
-      <h3>不知道问什么？试试这些高频问题</h3>
-      <div class="example-chip-list">
-        <button v-for="question in examples" :key="question" class="secondary-btn small-btn" @click="useExample(question)">
-          {{ question }}
-        </button>
       </div>
-    </article>
+
+      <div class="demo-video-frame" aria-label="nod 自动识别面试问题并生成回答的演示动画">
+        <div class="video-topbar">
+          <div class="video-dots"><span></span><span></span><span></span></div>
+          <strong>nod 实时面试辅助</strong>
+          <em>录制 00:24</em>
+        </div>
+
+        <div class="demo-video-stage">
+          <div class="interviewer-panel">
+            <div class="panel-label">面试官声音识别</div>
+            <div class="waveform" aria-hidden="true">
+              <span v-for="index in 28" :key="index"></span>
+            </div>
+            <div class="question-feed">
+              <div v-for="moment in demoMoments" :key="moment.time" class="question-cue">
+                <small>{{ moment.time }} · {{ moment.speaker }}</small>
+                <p>{{ moment.question }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="answer-panel">
+            <div class="panel-label">生成的口语化回答</div>
+            <div class="answer-feed">
+              <div v-for="moment in demoMoments" :key="moment.question" class="answer-cue">
+                <small>已生成回答</small>
+                <p>{{ moment.answer }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="video-progress"><span></span></div>
+      </div>
+    </div>
   </section>
 
   <section class="home-hero-section balanced-hero">
