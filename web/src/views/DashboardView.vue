@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { getBalanceTransactions, getInterviewRecords, getOrders, getProfile, getUsageSessions } from '../api';
+import { getBalanceTransactions, getInterviewSessions, getOrders, getProfile, getUsageSessions } from '../api';
 import { useSessionStore } from '../stores/session';
 
 const session = useSessionStore();
@@ -8,7 +8,7 @@ const profile = ref(null);
 const transactions = ref([]);
 const orders = ref([]);
 const usageRecords = ref([]);
-const interviewRecords = ref([]);
+const interviewSessions = ref([]);
 const loading = ref(false);
 const errorText = ref('');
 const showOpenClientHint = ref(false);
@@ -126,18 +126,18 @@ async function loadDashboard() {
   loading.value = true;
   errorText.value = '';
   try {
-    const [profileResult, transactionResult, orderResult, usageResult, interviewRecordResult] = await Promise.all([
+    const [profileResult, transactionResult, orderResult, usageResult, interviewSessionResult] = await Promise.all([
       getProfile(),
       getBalanceTransactions(),
       getOrders(),
       getUsageSessions(),
-      getInterviewRecords(),
+      getInterviewSessions(),
     ]);
     profile.value = profileResult;
     transactions.value = transactionResult.slice(0, 5);
     orders.value = orderResult.slice(0, 5);
     usageRecords.value = usageResult.slice(0, 5);
-    interviewRecords.value = interviewRecordResult.slice(0, 10);
+    interviewSessions.value = interviewSessionResult.slice(0, 3);
   } catch (error) {
     errorText.value = error.message;
   } finally {
@@ -184,23 +184,20 @@ onMounted(loadDashboard);
       <div class="card-title-row">
         <div>
           <h3>面试复习记录</h3>
-          <p class="compact-note">这里会保存桌面客户端每次识别到的面试官问题和生成答案，方便你面试后复盘。</p>
+          <p class="compact-note">按每一场面试归档，个人中心只展示最近几场，完整记录请进入详情页查看。</p>
+        </div>
+        <RouterLink class="secondary-btn small-btn link-btn" to="/interview-sessions">查看全部</RouterLink>
+      </div>
+      <div v-if="interviewSessions.length" class="mini-list">
+        <div v-for="sessionItem in interviewSessions" :key="sessionItem.sessionId" class="mini-list-item">
+          <div>
+            <strong>{{ formatDateTime(sessionItem.startedAt) }}</strong>
+            <p>{{ sessionItem.recordCount }} 条问答 · {{ sessionItem.previewQuestion || '暂无问题摘要' }}</p>
+          </div>
+          <RouterLink class="secondary-btn small-btn link-btn" :to="{ name: 'interview-session-detail', params: { sessionId: sessionItem.sessionId } }">详情</RouterLink>
         </div>
       </div>
-      <div v-if="interviewRecords.length" class="interview-record-list">
-        <div v-for="record in interviewRecords" :key="record.id" class="interview-record-item">
-          <div class="record-time">{{ formatDateTime(record.createdAt) }}</div>
-          <div class="record-block question-block">
-            <strong>面试官问题</strong>
-            <p>{{ record.question }}</p>
-          </div>
-          <div class="record-block answer-block">
-            <strong>生成回答</strong>
-            <p>{{ record.answer }}</p>
-          </div>
-        </div>
-      </div>
-      <div v-else class="empty-state compact">暂无面试复习记录。使用桌面客户端生成回答后，会自动保存到这里。</div>
+      <div v-else class="empty-state compact">暂无面试复习记录。使用桌面客户端生成回答后，会按面试场次自动归档。</div>
     </article>
 
     <div class="content-grid two-columns">

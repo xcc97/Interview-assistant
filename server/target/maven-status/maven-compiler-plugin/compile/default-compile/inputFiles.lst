@@ -22,6 +22,7 @@ D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\Hea
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\HeartbeatUsageSessionRequest.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\InterviewRecordRequest.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\InterviewRecordResponse.java
+D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\InterviewSessionSummaryResponse.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\LoginRequest.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\MockPaymentCallbackRequest.java
 D:\面试助手项目\server\src\main\java\com\interviewassistant\server\dto\OrderResponse.java

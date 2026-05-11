@@ -6,6 +6,7 @@ import com.interviewassistant.server.dto.CreateOrderRequest;
 import com.interviewassistant.server.dto.CreatePaymentRequest;
 import com.interviewassistant.server.dto.FinishUsageSessionRequest;
 import com.interviewassistant.server.dto.InterviewRecordResponse;
+import com.interviewassistant.server.dto.InterviewSessionSummaryResponse;
 import com.interviewassistant.server.dto.MockPaymentCallbackRequest;
 import com.interviewassistant.server.dto.OrderResponse;
 import com.interviewassistant.server.dto.PaymentCreateResponse;
@@ -23,6 +24,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -147,9 +149,14 @@ public class CommercialController {
         return commercialFacadeService.listUsageSessions(currentUserService.requireCurrentUserId());
     }
 
-    @GetMapping("/interview/records")
-    public List<InterviewRecordResponse> listInterviewRecords() {
-        return interviewRecordService.listRecent(currentUserService.requireCurrentUserId());
+    @GetMapping("/interview/sessions")
+    public List<InterviewSessionSummaryResponse> listInterviewSessions() {
+        return interviewRecordService.listSessionSummaries(currentUserService.requireCurrentUserId());
+    }
+
+    @GetMapping("/interview/sessions/{sessionId}/records")
+    public List<InterviewRecordResponse> listInterviewSessionRecords(@PathVariable String sessionId) {
+        return interviewRecordService.listSessionRecords(currentUserService.requireCurrentUserId(), sessionId);
     }
 
     @PostMapping("/usage/finish")

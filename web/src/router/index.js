@@ -6,6 +6,8 @@ import BillingView from '../views/BillingView.vue';
 import OrdersView from '../views/OrdersView.vue';
 import UsageView from '../views/UsageView.vue';
 import TransactionsView from '../views/TransactionsView.vue';
+import InterviewSessionsView from '../views/InterviewSessionsView.vue';
+import InterviewSessionDetailView from '../views/InterviewSessionDetailView.vue';
 import DownloadView from '../views/DownloadView.vue';
 import TermsView from '../views/TermsView.vue';
 import PrivacyView from '../views/PrivacyView.vue';
@@ -21,10 +23,12 @@ const router = createRouter({
     { path: '/', name: 'home', component: HomeView },
     { path: '/login', name: 'login', component: LoginView },
     { path: '/dashboard', name: 'dashboard', component: DashboardView, meta: { requiresAuth: true } },
-    { path: '/billing', name: 'billing', component: BillingView, meta: { requiresAuth: true } },
+    { path: '/billing', name: 'billing', component: BillingView },
     { path: '/orders', name: 'orders', component: OrdersView, meta: { requiresAuth: true } },
     { path: '/usage', name: 'usage', component: UsageView, meta: { requiresAuth: true } },
     { path: '/transactions', name: 'transactions', component: TransactionsView, meta: { requiresAuth: true } },
+    { path: '/interview-sessions', name: 'interview-sessions', component: InterviewSessionsView, meta: { requiresAuth: true } },
+    { path: '/interview-sessions/:sessionId', name: 'interview-session-detail', component: InterviewSessionDetailView, meta: { requiresAuth: true } },
     { path: '/console', redirect: { name: 'home', hash: '#try' } },
     { path: '/download', name: 'download', component: DownloadView },
     { path: '/readiness', name: 'readiness', component: ReadinessView, meta: { requiresAuth: true, requiresAdmin: true } },

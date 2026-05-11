@@ -1,9 +1,12 @@
 <script setup>
 import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { createOrder, getPlans } from '../api';
+import { useSessionStore } from '../stores/session';
 
 const router = useRouter();
+const route = useRoute();
+const session = useSessionStore();
 const plans = ref([]);
 const loading = ref(false);
 const orderingPlan = ref('');
@@ -30,12 +33,17 @@ async function loadPlans() {
 }
 
 async function handleCreateOrder(plan) {
-  orderingPlan.value = plan.planId || plan.id;
+  const planId = plan.planId || plan.id;
+  if (!session.isAuthenticated) {
+    router.push({ name: 'login', query: { redirect: route.fullPath, planId } });
+    return;
+  }
+  orderingPlan.value = planId;
   errorText.value = '';
   successText.value = '';
   try {
     const order = await createOrder({
-      planId: plan.planId || plan.id,
+      planId,
       paymentChannel: 'WECHAT',
     });
     successText.value = '订单已创建，请继续完成支付。';

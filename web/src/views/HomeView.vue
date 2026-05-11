@@ -76,6 +76,51 @@ function handleAnalyze() {
 </script>
 
 <template>
+  <section id="try" class="page-section try-section">
+    <div class="page-heading center-heading">
+      <p class="eyebrow">Try nod</p>
+      <h2>先用一个真实问题体验效果</h2>
+      <p>客户端会实时监听并识别面试官问题，这里先用几个典型问题展示 nod 的回答质量和表达风格。</p>
+    </div>
+
+    <div class="content-grid two-columns demo-grid embedded-demo-grid">
+      <article class="card analyzer-card">
+        <div class="card-title-row">
+          <h3>面试官问题</h3>
+          <span>客户端实时识别</span>
+        </div>
+        <label>
+          客户端会在面试中自动听取并识别面试官所有问题
+          <textarea v-model="form.question" rows="5" readonly></textarea>
+        </label>
+        <button class="primary-btn full" :disabled="isAnalyzing" @click="handleAnalyze">
+          {{ isAnalyzing ? '生成中...' : '查看回答示例' }}
+        </button>
+      </article>
+
+      <article class="card answer-card">
+        <div class="card-title-row">
+          <h3>回答示例</h3>
+          <span>口语化表达</span>
+        </div>
+        <div v-if="answer" class="answer-content">{{ answer }}</div>
+        <div v-else class="empty-state demo-empty-state">
+          <strong>点击左侧按钮查看示例答案</strong>
+          <p>你会看到一段更接近真实面试表达的口语化回答。</p>
+        </div>
+      </article>
+    </div>
+
+    <article class="card demo-examples-card compact-example-card">
+      <h3>不知道问什么？试试这些高频问题</h3>
+      <div class="example-chip-list">
+        <button v-for="question in examples" :key="question" class="secondary-btn small-btn" @click="useExample(question)">
+          {{ question }}
+        </button>
+      </div>
+    </article>
+  </section>
+
   <section class="home-hero-section balanced-hero">
     <div class="hero-card intro-card">
       <p class="eyebrow">nod 点头 · 面试表达助手</p>
@@ -138,51 +183,6 @@ function handleAnalyze() {
         <div><strong>通用面</strong><span>经历与动机</span></div>
       </div>
     </div>
-  </section>
-
-  <section id="try" class="page-section try-section">
-    <div class="page-heading center-heading">
-      <p class="eyebrow">Try nod</p>
-      <h2>先用一个真实问题体验效果</h2>
-      <p>客户端会实时监听并识别面试官问题，这里先用几个典型问题展示 nod 的回答质量和表达风格。</p>
-    </div>
-
-    <div class="content-grid two-columns demo-grid embedded-demo-grid">
-      <article class="card analyzer-card">
-        <div class="card-title-row">
-          <h3>面试官问题</h3>
-          <span>客户端实时识别</span>
-        </div>
-        <label>
-          客户端会在面试中自动听取并识别面试官所有问题
-          <textarea v-model="form.question" rows="5" readonly></textarea>
-        </label>
-        <button class="primary-btn full" :disabled="isAnalyzing" @click="handleAnalyze">
-          {{ isAnalyzing ? '生成中...' : '查看回答示例' }}
-        </button>
-      </article>
-
-      <article class="card answer-card">
-        <div class="card-title-row">
-          <h3>回答示例</h3>
-          <span>口语化表达</span>
-        </div>
-        <div v-if="answer" class="answer-content">{{ answer }}</div>
-        <div v-else class="empty-state demo-empty-state">
-          <strong>点击左侧按钮查看示例答案</strong>
-          <p>你会看到一段更接近真实面试表达的口语化回答。</p>
-        </div>
-      </article>
-    </div>
-
-    <article class="card demo-examples-card compact-example-card">
-      <h3>不知道问什么？试试这些高频问题</h3>
-      <div class="example-chip-list">
-        <button v-for="question in examples" :key="question" class="secondary-btn small-btn" @click="useExample(question)">
-          {{ question }}
-        </button>
-      </div>
-    </article>
   </section>
 
   <section class="page-section landing-section">

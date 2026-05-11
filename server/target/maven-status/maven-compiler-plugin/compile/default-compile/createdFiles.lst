@@ -10,6 +10,7 @@ com\interviewassistant\server\service\ClientAuthService.class
 com\interviewassistant\server\config\SecurityConfig.class
 com\interviewassistant\server\config\AssistantProperties$Bailian.class
 com\interviewassistant\server\config\AssistantProperties$Aliyun.class
+com\interviewassistant\server\dto\InterviewSessionSummaryResponse.class
 com\interviewassistant\server\service\AsrTokenService$TokenResult.class
 com\interviewassistant\server\dto\UserProfileResponse.class
 com\interviewassistant\server\dto\LoginRequest.class
@@ -26,6 +27,7 @@ com\interviewassistant\server\dto\FinishUsageSessionRequest.class
 com\interviewassistant\server\dto\StartUsageSessionRequest.class
 com\interviewassistant\server\config\SecurityConfig$JwtAuthenticationFilter.class
 com\interviewassistant\server\entity\UserAccount.class
+com\interviewassistant\server\service\InterviewRecordService$SessionGroup.class
 com\interviewassistant\server\entity\CommercialPlan.class
 com\interviewassistant\server\controller\AuthController.class
 com\interviewassistant\server\service\BailianAnswerService.class

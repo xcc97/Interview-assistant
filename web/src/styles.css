@@ -97,55 +97,17 @@ textarea:focus {
   letter-spacing: 0.1em;
 }
 
-.brand-logo {
-  width: 32px;
-  height: 32px;
-}
-
-.logo-bubble {
-  fill: rgba(255, 255, 255, 0.96);
-}
-
-.logo-n {
-  fill: #315ff4;
-}
-
-.logo-nod {
-  fill: none;
-  stroke: #7b3ff2;
-  stroke-linecap: round;
-  stroke-width: 4;
-}
-
 .brand-mark {
   display: grid;
   width: 44px;
   height: 44px;
   place-items: center;
-  border-radius: 16px;
-  color: #fff;
-  background: linear-gradient(135deg, #315ff4, #7b3ff2);
-  box-shadow: 0 12px 28px rgba(56, 103, 246, 0.3);
 }
 
 .brand-logo {
-  width: 34px;
-  height: 34px;
-}
-
-.logo-bubble {
-  fill: rgba(255, 255, 255, 0.96);
-}
-
-.logo-n {
-  fill: #315ff4;
-}
-
-.logo-nod {
-  fill: none;
-  stroke: #7b3ff2;
-  stroke-width: 4;
-  stroke-linecap: round;
+  width: 40px;
+  height: 40px;
+  display: block;
 }
 
 .brand-text {

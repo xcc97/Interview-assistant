@@ -115,8 +115,14 @@ export async function getUsageSessions() {
   });
 }
 
-export async function getInterviewRecords() {
-  return request('/api/interview/records', {
+export async function getInterviewSessions() {
+  return request('/api/interview/sessions', {
+    method: 'GET',
+  });
+}
+
+export async function getInterviewSessionRecords(sessionId) {
+  return request(`/api/interview/sessions/${encodeURIComponent(sessionId)}/records`, {
     method: 'GET',
   });
 }
