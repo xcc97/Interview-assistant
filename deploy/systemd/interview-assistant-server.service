@@ -1,0 +1,29 @@
+[Unit]
+Description=nod Interview Assistant Spring Boot Server
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=interview
+Group=interview
+WorkingDirectory=/opt/interview-assistant/server
+EnvironmentFile=/opt/interview-assistant/server/.env
+ExecStart=/usr/bin/java -XX:+UseG1GC -XX:MaxRAMPercentage=70 -jar /opt/interview-assistant/server/interview-assistant-server-1.0.0.jar
+Restart=always
+RestartSec=5
+SuccessExitStatus=143
+
+# 基础安全加固。若证书/日志目录权限有问题，可先注释相关项排查。
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/interview-assistant /var/log/interview-assistant
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=interview-assistant-server
+
+[Install]
+WantedBy=multi-user.target
