@@ -99,6 +99,9 @@ public class PaymentService {
         }
         AssistantProperties.Payment.Alipay alipay = properties.getPayment().getAlipay();
         ensureAlipayEnabled(alipay);
+        if (!alipay.getAppId().equals(params.get("app_id"))) {
+            throw new SecurityException("支付宝回调 app_id 与配置不一致");
+        }
         if (!verifyAlipaySign(params, alipay.getAlipayPublicKey())) {
             throw new SecurityException("支付宝回调验签失败");
         }
@@ -302,7 +305,9 @@ public class PaymentService {
         if (!"TRADE_SUCCESS".equals(status) && !"TRADE_FINISHED".equals(status)) {
             throw new IllegalStateException("支付宝交易未成功");
         }
-        BigDecimal paidAmount = params.containsKey("total_amount") ? new BigDecimal(params.get("total_amount")) : null;
+        BigDecimal paidAmount = params.containsKey("total_amount")
+            ? new BigDecimal(params.get("total_amount")).setScale(2, RoundingMode.HALF_UP)
+            : null;
         return new PaymentNotifyResult(params.get("out_trade_no"), "ALIPAY", paidAmount, params.getOrDefault("trade_no", ""));
     }
 

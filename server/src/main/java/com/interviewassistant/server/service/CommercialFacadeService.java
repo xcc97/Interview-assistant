@@ -205,7 +205,9 @@ public class CommercialFacadeService {
         CommercialOrder order = commercialOrderRepository.findById(notifyResult.getOrderId())
             .orElseThrow(() -> new IllegalArgumentException("订单不存在"));
         ensurePaymentNotifyMatchesOrder(order, notifyResult);
-        order.setPaymentTransactionId(notifyResult.getTransactionId());
+        if (notifyResult.getTransactionId() != null && !notifyResult.getTransactionId().isBlank()) {
+            order.setPaymentTransactionId(notifyResult.getTransactionId().trim());
+        }
         return markOrderPaid(order);
     }
 
@@ -218,6 +220,7 @@ public class CommercialFacadeService {
 
     private OrderResponse markOrderPaid(CommercialOrder order) {
         if ("PAID".equals(order.getStatus())) {
+            ensureGrantTransactionExists(order);
             return toOrderResponse(order);
         }
         if (!"PENDING".equals(order.getStatus())) {
@@ -227,18 +230,21 @@ public class CommercialFacadeService {
         order.setStatus("PAID");
         order.setPaidAt(OffsetDateTime.now());
         CommercialOrder savedOrder = commercialOrderRepository.save(order);
-
-        if (!balanceTransactionRepository.existsBySourceTypeAndSourceIdAndType("ORDER", savedOrder.getId(), "GRANT")) {
-            BalanceTransaction transaction = new BalanceTransaction();
-            transaction.setUserId(savedOrder.getUserId());
-            transaction.setType("GRANT");
-            transaction.setMinutes(savedOrder.getMinutes());
-            transaction.setSourceType("ORDER");
-            transaction.setSourceId(savedOrder.getId());
-            balanceTransactionRepository.save(transaction);
-        }
+        ensureGrantTransactionExists(savedOrder);
 
         return toOrderResponse(savedOrder);
+    }
+
+    private void ensureGrantTransactionExists(CommercialOrder order) {
+        if (!balanceTransactionRepository.existsBySourceTypeAndSourceIdAndType("ORDER", order.getId(), "GRANT")) {
+            BalanceTransaction transaction = new BalanceTransaction();
+            transaction.setUserId(order.getUserId());
+            transaction.setType("GRANT");
+            transaction.setMinutes(order.getMinutes());
+            transaction.setSourceType("ORDER");
+            transaction.setSourceId(order.getId());
+            balanceTransactionRepository.save(transaction);
+        }
     }
 
     @Transactional
@@ -287,14 +293,30 @@ public class CommercialFacadeService {
         if (notifyResult.getOrderId() == null || notifyResult.getOrderId().isBlank()) {
             throw new IllegalArgumentException("支付回调缺少订单号");
         }
-        if (notifyResult.getPaymentChannel() != null
-            && !notifyResult.getPaymentChannel().isBlank()
-            && !notifyResult.getPaymentChannel().equals(order.getPaymentChannel())) {
+        if (!notifyResult.getOrderId().equals(order.getId())) {
+            throw new SecurityException("支付回调订单号与数据库订单不一致");
+        }
+        if (notifyResult.getPaymentChannel() == null || notifyResult.getPaymentChannel().isBlank()) {
+            throw new SecurityException("支付回调缺少支付渠道");
+        }
+        if (!notifyResult.getPaymentChannel().equals(order.getPaymentChannel())) {
             throw new SecurityException("支付回调渠道与订单不一致");
         }
-        if (notifyResult.getPaidAmount() != null
-            && notifyResult.getPaidAmount().compareTo(order.getAmount()) != 0) {
+        if (notifyResult.getPaidAmount() == null) {
+            throw new SecurityException("支付回调缺少支付金额");
+        }
+        if (notifyResult.getPaidAmount().compareTo(order.getAmount()) != 0) {
             throw new SecurityException("支付回调金额与订单金额不一致");
+        }
+        if (notifyResult.getTransactionId() == null || notifyResult.getTransactionId().isBlank()) {
+            throw new SecurityException("支付回调缺少第三方交易号");
+        }
+        if (commercialOrderRepository.existsByPaymentChannelAndPaymentTransactionIdAndIdNot(
+            notifyResult.getPaymentChannel(),
+            notifyResult.getTransactionId().trim(),
+            order.getId()
+        )) {
+            throw new SecurityException("第三方支付交易号已被其他订单使用");
         }
     }
 

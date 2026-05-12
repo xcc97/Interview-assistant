@@ -11,6 +11,8 @@ public interface CommercialOrderRepository extends JpaRepository<CommercialOrder
 
     List<CommercialOrder> findByStatusAndCreatedAtBefore(String status, OffsetDateTime createdBefore);
 
+    boolean existsByPaymentChannelAndPaymentTransactionIdAndIdNot(String paymentChannel, String paymentTransactionId, String excludedOrderId);
+
     List<CommercialOrder> findTop100ByOrderByCreatedAtDesc();
 
     List<CommercialOrder> findTop100ByStatusOrderByCreatedAtDesc(String status);
