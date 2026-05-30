@@ -60,6 +60,8 @@ public class AssistantProperties {
         private String nlsAppKey = "";
         private String accessKeyId = "";
         private String accessKeySecret = "";
+        private String smsSignName = "";
+        private String smsRegisterTemplateCode = "";
         private String nlsEndpoint = "wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1";
 
         public String getNlsAppKey() {
@@ -84,6 +86,22 @@ public class AssistantProperties {
 
         public void setAccessKeySecret(String accessKeySecret) {
             this.accessKeySecret = accessKeySecret;
+        }
+
+        public String getSmsSignName() {
+            return smsSignName == null ? "" : smsSignName.trim();
+        }
+
+        public void setSmsSignName(String smsSignName) {
+            this.smsSignName = smsSignName;
+        }
+
+        public String getSmsRegisterTemplateCode() {
+            return smsRegisterTemplateCode == null ? "" : smsRegisterTemplateCode.trim();
+        }
+
+        public void setSmsRegisterTemplateCode(String smsRegisterTemplateCode) {
+            this.smsRegisterTemplateCode = smsRegisterTemplateCode;
         }
 
         public String getNlsEndpoint() {

@@ -2,23 +2,28 @@
 /target/
 /release/
 
+# Archive packages
+*.zip
+
 # Native build outputs
 native/windows/wasapi-loopback-capture/build/
 native/macos/system-audio-capture/.build/
 
-# Frontend build outputs
-web/node_modules/
+# Backend/Frontend build outputs
+server/target/
 web/dist/
+*.zip
+
+# Frontend local files
+web/node_modules/
 web/.env
+web/.env.*
 
 # IDE/local files
 .idea/workspace.xml
 .idea/CopilotChatHistory.xml
 .idea/CopilotChatTabs.xml
 
-# Web frontend
-web/node_modules/
-web/dist/
-web/.env
+# OS files
 .DS_Store
 **/.DS_Store

@@ -13,6 +13,7 @@ import com.interviewassistant.server.dto.PaymentNotifyResult;
 import com.interviewassistant.server.dto.PlanResponse;
 import com.interviewassistant.server.dto.RegisterRequest;
 import com.interviewassistant.server.dto.StartUsageSessionRequest;
+import com.interviewassistant.server.service.SmsVerificationService;
 import com.interviewassistant.server.dto.UsageSessionResponse;
 import com.interviewassistant.server.dto.UserProfileResponse;
 import com.interviewassistant.server.entity.BalanceTransaction;
@@ -48,6 +49,7 @@ public class CommercialFacadeService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
     private final AssistantProperties assistantProperties;
+    private final SmsVerificationService smsVerificationService;
 
     public CommercialFacadeService(UserAccountRepository userAccountRepository,
                                    CommercialPlanRepository commercialPlanRepository,
@@ -56,7 +58,8 @@ public class CommercialFacadeService {
                                    BalanceTransactionRepository balanceTransactionRepository,
                                    PasswordEncoder passwordEncoder,
                                    JwtTokenService jwtTokenService,
-                                   AssistantProperties assistantProperties) {
+                                   AssistantProperties assistantProperties,
+                                   SmsVerificationService smsVerificationService) {
         this.userAccountRepository = userAccountRepository;
         this.commercialPlanRepository = commercialPlanRepository;
         this.commercialOrderRepository = commercialOrderRepository;
@@ -65,26 +68,30 @@ public class CommercialFacadeService {
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
         this.assistantProperties = assistantProperties;
+        this.smsVerificationService = smsVerificationService;
     }
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        userAccountRepository.findByPhone(request.getPhone()).ifPresent(user -> {
+        String phone = normalizePhone(request.getPhone());
+        smsVerificationService.verify(phone, request.getSmsCode());
+        userAccountRepository.findByPhone(phone).ifPresent(user -> {
             throw new IllegalArgumentException("手机号已注册");
         });
 
         UserAccount user = new UserAccount();
-        user.setPhone(request.getPhone());
+        user.setPhone(phone);
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        user.setNickname(request.getNickname() == null || request.getNickname().isBlank() ? "新用户" : request.getNickname());
+        user.setNickname(request.getNickname() == null || request.getNickname().isBlank() ? defaultNickname(phone) : request.getNickname().trim());
         user.setStatus("ACTIVE");
-        user.setRole(resolveRole(request.getPhone()));
+        user.setRole(resolveRole(phone));
         return buildAuthResponse(userAccountRepository.save(user));
     }
 
     public AuthResponse login(LoginRequest request) {
-        UserAccount user = userAccountRepository.findByPhone(request.getPhone())
-            .orElseGet(() -> createDemoUserIfMatched(request));
+        String phone = normalizePhone(request.getPhone());
+        UserAccount user = userAccountRepository.findByPhone(phone)
+            .orElseGet(() -> createDemoUserIfMatched(phone, request));
         if (!passwordMatches(request.getPassword(), user.getPasswordHash())) {
             throw new SecurityException("手机号或密码错误");
         }
@@ -429,8 +436,8 @@ public class CommercialFacadeService {
             .orElseThrow(() -> new SecurityException("用户不存在或未登录"));
     }
 
-    private UserAccount createDemoUserIfMatched(LoginRequest request) {
-        if (!"13800138000".equals(request.getPhone()) || !"123456".equals(request.getPassword())) {
+    private UserAccount createDemoUserIfMatched(String phone, LoginRequest request) {
+        if (!"13800138000".equals(phone) || !"123456".equals(request.getPassword())) {
             throw new SecurityException("手机号或密码错误");
         }
         return createDemoUser();
@@ -452,6 +459,21 @@ public class CommercialFacadeService {
             .map(String::trim)
             .anyMatch(adminPhone -> !adminPhone.isBlank() && adminPhone.equals(phone));
         return isAdmin ? "ADMIN" : "USER";
+    }
+
+    private String normalizePhone(String phone) {
+        if (phone == null) {
+            throw new IllegalArgumentException("手机号不能为空");
+        }
+        String normalized = phone.trim();
+        if (!normalized.matches("^1[3-9]\\d{9}$")) {
+            throw new IllegalArgumentException("请输入有效的手机号");
+        }
+        return normalized;
+    }
+
+    private String defaultNickname(String phone) {
+        return "用户" + phone.substring(phone.length() - 4);
     }
 
     public boolean isAdmin(String userId) {

@@ -1,6 +1,20 @@
 import { useSessionStore } from './stores/session';
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+function resolveApiBaseUrl() {
+  const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
+  if (!configuredBaseUrl) {
+    return typeof window !== 'undefined' ? window.location.origin : '';
+  }
+
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && configuredBaseUrl.startsWith('http://')) {
+    return configuredBaseUrl.replace(/^http:/, 'https:');
+  }
+
+  return configuredBaseUrl;
+}
+
+const apiBaseUrl = resolveApiBaseUrl();
 const clientSecret = import.meta.env.VITE_CLIENT_SECRET || '';
 const enableMockPayment = import.meta.env.VITE_ENABLE_MOCK_PAYMENT === 'true';
 
@@ -45,6 +59,13 @@ export async function login(payload) {
 
 export async function register(payload) {
   return request('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function sendRegisterSmsCode(payload) {
+  return request('/api/auth/register/sms-code', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
