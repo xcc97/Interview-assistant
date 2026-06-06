@@ -62,6 +62,7 @@ public class AssistantProperties {
         private String accessKeySecret = "";
         private String smsSignName = "";
         private String smsRegisterTemplateCode = "";
+        private boolean smsDebugEnabled = true;
         private String nlsEndpoint = "wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1";
 
         public String getNlsAppKey() {
@@ -102,6 +103,14 @@ public class AssistantProperties {
 
         public void setSmsRegisterTemplateCode(String smsRegisterTemplateCode) {
             this.smsRegisterTemplateCode = smsRegisterTemplateCode;
+        }
+
+        public boolean isSmsDebugEnabled() {
+            return smsDebugEnabled;
+        }
+
+        public void setSmsDebugEnabled(boolean smsDebugEnabled) {
+            this.smsDebugEnabled = smsDebugEnabled;
         }
 
         public String getNlsEndpoint() {

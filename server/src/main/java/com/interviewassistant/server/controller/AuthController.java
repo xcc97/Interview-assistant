@@ -4,7 +4,6 @@ import com.interviewassistant.server.dto.AuthResponse;
 import com.interviewassistant.server.dto.LoginRequest;
 import com.interviewassistant.server.dto.RegisterRequest;
 import com.interviewassistant.server.dto.SmsSendRequest;
-import com.interviewassistant.server.dto.SmsVerifyRequest;
 import com.interviewassistant.server.dto.UserProfileResponse;
 import com.interviewassistant.server.service.AliyunSmsService;
 import com.interviewassistant.server.service.CommercialFacadeService;
@@ -38,12 +37,15 @@ public class AuthController {
     @PostMapping("/register/sms-code")
     public java.util.Map<String, Object> sendRegisterSmsCode(@Valid @RequestBody SmsSendRequest request) {
         String phone = request.getPhone().trim();
+        commercialFacadeService.ensurePhoneCanRegister(phone);
         String code = smsVerificationService.sendCode(phone);
-        String debugCode = aliyunSmsService.sendRegisterCode(phone);
+        aliyunSmsService.sendRegisterCode(phone, code);
+        if (aliyunSmsService.isConfigured() || !aliyunSmsService.isDebugEnabled()) {
+            return java.util.Map.of("message", "验证码已发送");
+        }
         return java.util.Map.of(
             "message", "验证码已发送",
-            "debugCode", debugCode,
-            "localCode", code
+            "debugCode", code
         );
     }
 

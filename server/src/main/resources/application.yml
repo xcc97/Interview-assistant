@@ -24,6 +24,9 @@ interview-assistant:
     nls-app-key: ${ALIYUN_NLS_APP_KEY:}
     access-key-id: ${ALIYUN_ACCESS_KEY_ID:}
     access-key-secret: ${ALIYUN_ACCESS_KEY_SECRET:}
+    sms-sign-name: ${ALIYUN_SMS_SIGN_NAME:}
+    sms-register-template-code: ${ALIYUN_SMS_REGISTER_TEMPLATE_CODE:}
+    sms-debug-enabled: ${ALIYUN_SMS_DEBUG_ENABLED:true}
     nls-endpoint: ${ALIYUN_NLS_ENDPOINT:wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1}
   bailian:
     api-key: ${BAILIAN_API_KEY:}

@@ -75,9 +75,7 @@ public class CommercialFacadeService {
     public AuthResponse register(RegisterRequest request) {
         String phone = normalizePhone(request.getPhone());
         smsVerificationService.verifyCode(phone, request.getSmsCode());
-        userAccountRepository.findByPhone(phone).ifPresent(user -> {
-            throw new IllegalArgumentException("手机号已注册");
-        });
+        ensurePhoneCanRegister(phone);
 
         UserAccount user = new UserAccount();
         user.setPhone(phone);
@@ -96,6 +94,13 @@ public class CommercialFacadeService {
             throw new SecurityException("手机号或密码错误");
         }
         return buildAuthResponse(user);
+    }
+
+    public void ensurePhoneCanRegister(String phone) {
+        String normalizedPhone = normalizePhone(phone);
+        userAccountRepository.findByPhone(normalizedPhone).ifPresent(user -> {
+            throw new IllegalArgumentException("手机号已注册");
+        });
     }
 
     @Transactional(readOnly = true)

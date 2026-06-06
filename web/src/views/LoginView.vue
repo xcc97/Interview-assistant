@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { register, sendRegisterSmsCode } from '../api';
 import { useSessionStore } from '../stores/session';
@@ -15,7 +15,16 @@ const password = ref('');
 const submitting = ref(false);
 const sendingCode = ref(false);
 const codeSent = ref(false);
+const countdown = ref(0);
 const errorText = ref('');
+let countdownTimer = null;
+
+const canSendCode = computed(() => !sendingCode.value && countdown.value <= 0);
+const sendCodeButtonText = computed(() => {
+  if (sendingCode.value) return '发送中...';
+  if (countdown.value > 0) return `${countdown.value}s 后重发`;
+  return codeSent.value ? '重新发送' : '发送验证码';
+});
 
 watch(
   () => route.query.mode,
@@ -24,6 +33,12 @@ watch(
     errorText.value = '';
   }
 );
+
+onUnmounted(() => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+  }
+});
 
 function switchMode() {
   const nextMode = mode.value === 'login' ? 'register' : 'login';
@@ -41,7 +56,24 @@ function validatePhone(value) {
   return /^1[3-9]\d{9}$/.test(value);
 }
 
+function startCountdown(seconds = 60) {
+  countdown.value = seconds;
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+  }
+  countdownTimer = setInterval(() => {
+    countdown.value -= 1;
+    if (countdown.value <= 0) {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+  }, 1000);
+}
+
 async function handleSendCode() {
+  if (!canSendCode.value) {
+    return;
+  }
   errorText.value = '';
   const normalizedPhone = normalizePhone(phone.value);
   if (!validatePhone(normalizedPhone)) {
@@ -52,6 +84,7 @@ async function handleSendCode() {
   try {
     const result = await sendRegisterSmsCode({ phone: normalizedPhone });
     codeSent.value = true;
+    startCountdown();
     errorText.value = result?.debugCode
       ? `验证码已发送（测试码：${result.debugCode}）`
       : '验证码已发送';
@@ -118,8 +151,8 @@ async function handleSubmit() {
         验证码
         <div class="code-row">
           <input v-model="smsCode" type="text" inputmode="numeric" maxlength="6" placeholder="请输入6位验证码" />
-          <button class="secondary-btn" :disabled="sendingCode" @click="handleSendCode">
-            {{ sendingCode ? '发送中...' : codeSent ? '重新发送' : '发送验证码' }}
+          <button class="secondary-btn" :disabled="!canSendCode" @click="handleSendCode">
+            {{ sendCodeButtonText }}
           </button>
         </div>
       </label>
