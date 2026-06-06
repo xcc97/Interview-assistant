@@ -9,9 +9,8 @@ const app = createApp(App);
 const pinia = createPinia();
 
 app.use(pinia);
+app.use(router);
+app.mount('#app');
 
 const session = useSessionStore();
-session.restore().catch(() => undefined).finally(() => {
-  app.use(router);
-  app.mount('#app');
-});
+session.restore().catch(() => undefined);

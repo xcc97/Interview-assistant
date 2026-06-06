@@ -74,7 +74,7 @@ public class CommercialFacadeService {
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         String phone = normalizePhone(request.getPhone());
-        smsVerificationService.verify(phone, request.getSmsCode());
+        smsVerificationService.verifyCode(phone, request.getSmsCode());
         userAccountRepository.findByPhone(phone).ifPresent(user -> {
             throw new IllegalArgumentException("手机号已注册");
         });

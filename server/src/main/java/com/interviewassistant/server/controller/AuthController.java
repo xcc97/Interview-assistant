@@ -49,7 +49,6 @@ public class AuthController {
 
     @PostMapping("/register")
     public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
-        smsVerificationService.verifyCode(request.getPhone().trim(), request.getSmsCode().trim());
         return commercialFacadeService.register(request);
     }
 

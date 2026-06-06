@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { register, sendRegisterSmsCode, verifyRegisterSmsCode } from '../api';
+import { register, sendRegisterSmsCode } from '../api';
 import { useSessionStore } from '../stores/session';
 
 const router = useRouter();
@@ -50,9 +50,11 @@ async function handleSendCode() {
   }
   sendingCode.value = true;
   try {
-    await sendRegisterSmsCode({ phone: normalizedPhone });
+    const result = await sendRegisterSmsCode({ phone: normalizedPhone });
     codeSent.value = true;
-    errorText.value = '验证码已发送，当前环境会直接返回验证码用于测试';
+    errorText.value = result?.debugCode
+      ? `验证码已发送（测试码：${result.debugCode}）`
+      : '验证码已发送';
   } catch (error) {
     errorText.value = error.message;
   } finally {
@@ -78,7 +80,6 @@ async function handleSubmit() {
       if (!smsCode.value.trim()) {
         throw new Error('请输入验证码');
       }
-      await verifyRegisterSmsCode({ phone: normalizedPhone, code: smsCode.value.trim() });
       await register({
         nickname: nickname.value.trim(),
         phone: normalizedPhone,
