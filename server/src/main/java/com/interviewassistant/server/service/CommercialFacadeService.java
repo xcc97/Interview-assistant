@@ -5,7 +5,6 @@ import com.interviewassistant.server.dto.AuthResponse;
 import com.interviewassistant.server.dto.BalanceTransactionResponse;
 import com.interviewassistant.server.dto.CreateOrderRequest;
 import com.interviewassistant.server.dto.FinishUsageSessionRequest;
-import com.interviewassistant.server.dto.HeartbeatUsageSessionRequest;
 import com.interviewassistant.server.dto.LoginRequest;
 import com.interviewassistant.server.dto.MockPaymentCallbackRequest;
 import com.interviewassistant.server.dto.OrderResponse;
@@ -13,7 +12,6 @@ import com.interviewassistant.server.dto.PaymentNotifyResult;
 import com.interviewassistant.server.dto.PlanResponse;
 import com.interviewassistant.server.dto.RegisterRequest;
 import com.interviewassistant.server.dto.StartUsageSessionRequest;
-import com.interviewassistant.server.service.SmsVerificationService;
 import com.interviewassistant.server.dto.UsageSessionResponse;
 import com.interviewassistant.server.dto.UserProfileResponse;
 import com.interviewassistant.server.entity.BalanceTransaction;
@@ -21,11 +19,11 @@ import com.interviewassistant.server.entity.CommercialOrder;
 import com.interviewassistant.server.entity.CommercialPlan;
 import com.interviewassistant.server.entity.UsageSession;
 import com.interviewassistant.server.entity.UserAccount;
-import com.interviewassistant.server.repository.BalanceTransactionRepository;
-import com.interviewassistant.server.repository.CommercialOrderRepository;
-import com.interviewassistant.server.repository.CommercialPlanRepository;
-import com.interviewassistant.server.repository.UsageSessionRepository;
-import com.interviewassistant.server.repository.UserAccountRepository;
+import com.interviewassistant.server.mapper.BalanceTransactionMapper;
+import com.interviewassistant.server.mapper.CommercialOrderMapper;
+import com.interviewassistant.server.mapper.CommercialPlanMapper;
+import com.interviewassistant.server.mapper.UsageSessionMapper;
+import com.interviewassistant.server.mapper.UserAccountMapper;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,30 +39,30 @@ public class CommercialFacadeService {
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
     private static final String DEMO_USER_ID = "user-demo-001";
 
-    private final UserAccountRepository userAccountRepository;
-    private final CommercialPlanRepository commercialPlanRepository;
-    private final CommercialOrderRepository commercialOrderRepository;
-    private final UsageSessionRepository usageSessionRepository;
-    private final BalanceTransactionRepository balanceTransactionRepository;
+    private final UserAccountMapper userAccountMapper;
+    private final CommercialPlanMapper commercialPlanMapper;
+    private final CommercialOrderMapper commercialOrderMapper;
+    private final UsageSessionMapper usageSessionMapper;
+    private final BalanceTransactionMapper balanceTransactionMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
     private final AssistantProperties assistantProperties;
     private final SmsVerificationService smsVerificationService;
 
-    public CommercialFacadeService(UserAccountRepository userAccountRepository,
-                                   CommercialPlanRepository commercialPlanRepository,
-                                   CommercialOrderRepository commercialOrderRepository,
-                                   UsageSessionRepository usageSessionRepository,
-                                   BalanceTransactionRepository balanceTransactionRepository,
+    public CommercialFacadeService(UserAccountMapper userAccountMapper,
+                                   CommercialPlanMapper commercialPlanMapper,
+                                   CommercialOrderMapper commercialOrderMapper,
+                                   UsageSessionMapper usageSessionMapper,
+                                   BalanceTransactionMapper balanceTransactionMapper,
                                    PasswordEncoder passwordEncoder,
                                    JwtTokenService jwtTokenService,
                                    AssistantProperties assistantProperties,
                                    SmsVerificationService smsVerificationService) {
-        this.userAccountRepository = userAccountRepository;
-        this.commercialPlanRepository = commercialPlanRepository;
-        this.commercialOrderRepository = commercialOrderRepository;
-        this.usageSessionRepository = usageSessionRepository;
-        this.balanceTransactionRepository = balanceTransactionRepository;
+        this.userAccountMapper = userAccountMapper;
+        this.commercialPlanMapper = commercialPlanMapper;
+        this.commercialOrderMapper = commercialOrderMapper;
+        this.usageSessionMapper = usageSessionMapper;
+        this.balanceTransactionMapper = balanceTransactionMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
         this.assistantProperties = assistantProperties;
@@ -83,13 +81,17 @@ public class CommercialFacadeService {
         user.setNickname(request.getNickname() == null || request.getNickname().isBlank() ? defaultNickname(phone) : request.getNickname().trim());
         user.setStatus("ACTIVE");
         user.setRole(resolveRole(phone));
-        return buildAuthResponse(userAccountRepository.save(user));
+        prepareUserForInsert(user);
+        userAccountMapper.insert(user);
+        return buildAuthResponse(user);
     }
 
     public AuthResponse login(LoginRequest request) {
         String phone = normalizePhone(request.getPhone());
-        UserAccount user = userAccountRepository.findByPhone(phone)
-            .orElseGet(() -> createDemoUserIfMatched(phone, request));
+        UserAccount user = userAccountMapper.selectByPhone(phone);
+        if (user == null) {
+            user = createDemoUserIfMatched(phone, request);
+        }
         if (!passwordMatches(request.getPassword(), user.getPasswordHash())) {
             throw new SecurityException("手机号或密码错误");
         }
@@ -98,15 +100,15 @@ public class CommercialFacadeService {
 
     public void ensurePhoneCanRegister(String phone) {
         String normalizedPhone = normalizePhone(phone);
-        userAccountRepository.findByPhone(normalizedPhone).ifPresent(user -> {
+        if (userAccountMapper.selectByPhone(normalizedPhone) != null) {
             throw new IllegalArgumentException("手机号已注册");
-        });
+        }
     }
 
     @Transactional(readOnly = true)
     public UserProfileResponse getProfile(String userId) {
         UserAccount user = resolveUser(userId);
-        List<BalanceTransaction> transactions = balanceTransactionRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        List<BalanceTransaction> transactions = balanceTransactionMapper.selectByUserIdOrderByCreatedAtDesc(user.getId());
         int remainingSeconds = transactions.stream().mapToInt(this::transactionSeconds).sum();
         int remainingMinutes = (int) Math.ceil(Math.max(0, remainingSeconds) / 60.0);
         int usedSeconds = transactions.stream()
@@ -115,16 +117,15 @@ public class CommercialFacadeService {
             .map(Math::abs)
             .sum();
         int usedMinutes = (int) Math.ceil(usedSeconds / 60.0);
-        CommercialOrder latestPaidOrder = commercialOrderRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream()
+        CommercialOrder latestPaidOrder = commercialOrderMapper.selectByUserIdOrderByCreatedAtDesc(user.getId()).stream()
             .filter(order -> "PAID".equals(order.getStatus()))
             .findFirst()
             .orElse(null);
         String currentPlanName = latestPaidOrder == null ? "暂无套餐" : latestPaidOrder.getPlanName();
+        CommercialPlan latestPlan = latestPaidOrder == null ? null : commercialPlanMapper.selectById(latestPaidOrder.getPlanId());
         String expiryTime = latestPaidOrder == null
             ? null
-            : commercialPlanRepository.findById(latestPaidOrder.getPlanId())
-                .map(plan -> latestPaidOrder.getPaidAt().plusDays(plan.getValidDays()).format(FORMATTER))
-                .orElse(latestPaidOrder.getPaidAt().plusDays(30).format(FORMATTER));
+            : latestPaidOrder.getPaidAt().plusDays(latestPlan == null ? 30 : latestPlan.getValidDays()).format(FORMATTER);
 
         return new UserProfileResponse(
             user.getId(),
@@ -143,7 +144,7 @@ public class CommercialFacadeService {
 
     @Transactional(readOnly = true)
     public List<PlanResponse> listPlans() {
-        List<CommercialPlan> plans = commercialPlanRepository.findByStatusOrderByPriceAsc("ACTIVE");
+        List<CommercialPlan> plans = commercialPlanMapper.selectByStatusOrderByPriceAsc("ACTIVE");
         if (plans.isEmpty()) {
             return fallbackPlans();
         }
@@ -168,13 +169,15 @@ public class CommercialFacadeService {
         if (request.getPaymentChannel() != null && !request.getPaymentChannel().isBlank()) {
             order.setPaymentChannel(normalizePaymentChannel(request.getPaymentChannel()));
         }
-        return toOrderResponse(commercialOrderRepository.save(order));
+        prepareOrderForInsert(order);
+        commercialOrderMapper.insert(order);
+        return toOrderResponse(order);
     }
 
     @Transactional(readOnly = true)
     public List<OrderResponse> listOrders(String userId) {
         UserAccount user = resolveUser(userId);
-        return commercialOrderRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream()
+        return commercialOrderMapper.selectByUserIdOrderByCreatedAtDesc(user.getId()).stream()
             .map(this::toOrderResponse)
             .toList();
     }
@@ -183,16 +186,15 @@ public class CommercialFacadeService {
     public List<OrderResponse> listRecentAdminOrders(String status) {
         String normalizedStatus = status == null ? "" : status.trim().toUpperCase();
         List<CommercialOrder> orders = normalizedStatus.isBlank()
-            ? commercialOrderRepository.findTop100ByOrderByCreatedAtDesc()
-            : commercialOrderRepository.findTop100ByStatusOrderByCreatedAtDesc(normalizedStatus);
+            ? commercialOrderMapper.selectTop100OrderByCreatedAtDesc()
+            : commercialOrderMapper.selectTop100ByStatusOrderByCreatedAtDesc(normalizedStatus);
         return orders.stream().map(this::toOrderResponse).toList();
     }
 
     @Transactional
     public CommercialOrder resolveOwnedPendingOrder(String userId, String orderId, String paymentChannel) {
         UserAccount user = resolveUser(userId);
-        CommercialOrder order = commercialOrderRepository.findById(orderId)
-            .orElseThrow(() -> new IllegalArgumentException("订单不存在"));
+        CommercialOrder order = requireOrder(orderId);
         if (!user.getId().equals(order.getUserId())) {
             throw new SecurityException("无权操作该订单");
         }
@@ -200,14 +202,14 @@ public class CommercialFacadeService {
             throw new IllegalStateException("订单状态不可支付");
         }
         order.setPaymentChannel(normalizePaymentChannel(paymentChannel));
-        return commercialOrderRepository.save(order);
+        commercialOrderMapper.update(order);
+        return order;
     }
 
     @Transactional
     public OrderResponse markOrderPaid(String userId, MockPaymentCallbackRequest request) {
         UserAccount user = resolveUser(userId);
-        CommercialOrder order = commercialOrderRepository.findById(request.getOrderId())
-            .orElseThrow(() -> new IllegalArgumentException("订单不存在"));
+        CommercialOrder order = requireOrder(request.getOrderId());
         if (!user.getId().equals(order.getUserId())) {
             throw new SecurityException("无权操作该订单");
         }
@@ -216,8 +218,7 @@ public class CommercialFacadeService {
 
     @Transactional
     public OrderResponse markOrderPaid(PaymentNotifyResult notifyResult) {
-        CommercialOrder order = commercialOrderRepository.findById(notifyResult.getOrderId())
-            .orElseThrow(() -> new IllegalArgumentException("订单不存在"));
+        CommercialOrder order = requireOrder(notifyResult.getOrderId());
         ensurePaymentNotifyMatchesOrder(order, notifyResult);
         if (notifyResult.getTransactionId() != null && !notifyResult.getTransactionId().isBlank()) {
             order.setPaymentTransactionId(notifyResult.getTransactionId().trim());
@@ -227,9 +228,7 @@ public class CommercialFacadeService {
 
     @Transactional
     public OrderResponse markOrderPaid(String orderId) {
-        CommercialOrder order = commercialOrderRepository.findById(orderId)
-            .orElseThrow(() -> new IllegalArgumentException("订单不存在"));
-        return markOrderPaid(order);
+        return markOrderPaid(requireOrder(orderId));
     }
 
     private OrderResponse markOrderPaid(CommercialOrder order) {
@@ -243,28 +242,27 @@ public class CommercialFacadeService {
 
         order.setStatus("PAID");
         order.setPaidAt(OffsetDateTime.now());
-        CommercialOrder savedOrder = commercialOrderRepository.save(order);
-        ensureGrantTransactionExists(savedOrder);
-
-        return toOrderResponse(savedOrder);
+        commercialOrderMapper.update(order);
+        ensureGrantTransactionExists(order);
+        return toOrderResponse(order);
     }
 
     private void ensureGrantTransactionExists(CommercialOrder order) {
-        if (!balanceTransactionRepository.existsBySourceTypeAndSourceIdAndType("ORDER", order.getId(), "GRANT")) {
+        if (!balanceTransactionMapper.existsBySourceTypeAndSourceIdAndType("ORDER", order.getId(), "GRANT")) {
             BalanceTransaction transaction = new BalanceTransaction();
             transaction.setUserId(order.getUserId());
             transaction.setType("GRANT");
             transaction.setMinutes(order.getMinutes());
             transaction.setSourceType("ORDER");
             transaction.setSourceId(order.getId());
-            balanceTransactionRepository.save(transaction);
+            prepareBalanceTransactionForInsert(transaction);
+            balanceTransactionMapper.insert(transaction);
         }
     }
 
     @Transactional
     public OrderResponse adminCloseOrder(String orderId, String reason) {
-        CommercialOrder order = commercialOrderRepository.findById(orderId)
-            .orElseThrow(() -> new IllegalArgumentException("订单不存在"));
+        CommercialOrder order = requireOrder(orderId);
         if ("PAID".equals(order.getStatus())) {
             throw new IllegalStateException("已支付订单不可关闭");
         }
@@ -274,13 +272,13 @@ public class CommercialFacadeService {
         order.setStatus("CLOSED");
         order.setClosedAt(OffsetDateTime.now());
         order.setCloseReason(reason == null || reason.isBlank() ? "管理员手动关闭" : reason.trim());
-        return toOrderResponse(commercialOrderRepository.save(order));
+        commercialOrderMapper.update(order);
+        return toOrderResponse(order);
     }
 
     @Transactional
     public OrderResponse adminGrantPaidOrder(String orderId, String transactionId) {
-        CommercialOrder order = commercialOrderRepository.findById(orderId)
-            .orElseThrow(() -> new IllegalArgumentException("订单不存在"));
+        CommercialOrder order = requireOrder(orderId);
         if ("CLOSED".equals(order.getStatus())) {
             throw new IllegalStateException("已关闭订单不可补单入账");
         }
@@ -293,13 +291,13 @@ public class CommercialFacadeService {
     @Transactional
     public int closeExpiredPendingOrders(int timeoutMinutes) {
         OffsetDateTime deadline = OffsetDateTime.now().minusMinutes(Math.max(1, timeoutMinutes));
-        List<CommercialOrder> expiredOrders = commercialOrderRepository.findByStatusAndCreatedAtBefore("PENDING", deadline);
+        List<CommercialOrder> expiredOrders = commercialOrderMapper.selectByStatusAndCreatedAtBefore("PENDING", deadline);
         expiredOrders.forEach(order -> {
             order.setStatus("CLOSED");
             order.setClosedAt(OffsetDateTime.now());
             order.setCloseReason("订单超过 " + Math.max(1, timeoutMinutes) + " 分钟未支付，系统自动关闭");
+            commercialOrderMapper.update(order);
         });
-        commercialOrderRepository.saveAll(expiredOrders);
         return expiredOrders.size();
     }
 
@@ -325,7 +323,7 @@ public class CommercialFacadeService {
         if (notifyResult.getTransactionId() == null || notifyResult.getTransactionId().isBlank()) {
             throw new SecurityException("支付回调缺少第三方交易号");
         }
-        if (commercialOrderRepository.existsByPaymentChannelAndPaymentTransactionIdAndIdNot(
+        if (commercialOrderMapper.existsByPaymentChannelAndPaymentTransactionIdAndIdNot(
             notifyResult.getPaymentChannel(),
             notifyResult.getTransactionId().trim(),
             order.getId()
@@ -345,13 +343,15 @@ public class CommercialFacadeService {
             ? "INTERVIEW_ASSIST"
             : request.getScenario());
         session.setStatus("ACTIVE");
-        return toUsageSessionResponse(usageSessionRepository.save(session));
+        prepareUsageSessionForInsert(session);
+        usageSessionMapper.insert(session);
+        return toUsageSessionResponse(session);
     }
 
     @Transactional(readOnly = true)
     public List<UsageSessionResponse> listUsageSessions(String userId) {
         UserAccount user = resolveUser(userId);
-        return usageSessionRepository.findByUserIdOrderByStartedAtDesc(user.getId()).stream()
+        return usageSessionMapper.selectByUserIdOrderByStartedAtDesc(user.getId()).stream()
             .map(this::toUsageSessionResponse)
             .toList();
     }
@@ -359,8 +359,10 @@ public class CommercialFacadeService {
     @Transactional
     public UsageSessionResponse finishUsageSession(String userId, FinishUsageSessionRequest request) {
         UserAccount user = resolveUser(userId);
-        UsageSession session = usageSessionRepository.findById(request.getSessionId())
-            .orElseThrow(() -> new IllegalArgumentException("使用会话不存在"));
+        UsageSession session = usageSessionMapper.selectById(request.getSessionId());
+        if (session == null) {
+            throw new IllegalArgumentException("使用会话不存在");
+        }
         if (!user.getId().equals(session.getUserId())) {
             throw new SecurityException("无权操作该使用会话");
         }
@@ -378,31 +380,31 @@ public class CommercialFacadeService {
         if (chargedSeconds <= 0) {
             throw new SecurityException("可用时长不足，无法结算本次使用");
         }
-        int chargedMinutes = (int) Math.ceil(chargedSeconds / 60.0);
 
         session.setEndedAt(endedAt);
         session.setDurationSeconds((int) durationSeconds);
         session.setChargedSeconds(chargedSeconds);
         session.setStatus("SETTLED");
-        UsageSession savedSession = usageSessionRepository.save(session);
+        usageSessionMapper.update(session);
 
-        if (!balanceTransactionRepository.existsBySourceTypeAndSourceIdAndType("SESSION", savedSession.getId(), "CONSUME")) {
+        if (!balanceTransactionMapper.existsBySourceTypeAndSourceIdAndType("SESSION", session.getId(), "CONSUME")) {
             BalanceTransaction transaction = new BalanceTransaction();
             transaction.setUserId(user.getId());
             transaction.setType("CONSUME");
             transaction.setSeconds(-chargedSeconds);
             transaction.setSourceType("SESSION");
-            transaction.setSourceId(savedSession.getId());
-            balanceTransactionRepository.save(transaction);
+            transaction.setSourceId(session.getId());
+            prepareBalanceTransactionForInsert(transaction);
+            balanceTransactionMapper.insert(transaction);
         }
 
-        return toUsageSessionResponse(savedSession);
+        return toUsageSessionResponse(session);
     }
 
     @Transactional(readOnly = true)
     public List<BalanceTransactionResponse> listBalanceTransactions(String userId) {
         UserAccount user = resolveUser(userId);
-        return balanceTransactionRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream()
+        return balanceTransactionMapper.selectByUserIdOrderByCreatedAtDesc(user.getId()).stream()
             .map(this::toBalanceTransactionResponse)
             .toList();
     }
@@ -434,11 +436,14 @@ public class CommercialFacadeService {
     }
 
     private UserAccount resolveUser(String userId) {
-        if (DEMO_USER_ID.equals(userId)) {
-            return userAccountRepository.findById(DEMO_USER_ID).orElseGet(this::createDemoUser);
+        UserAccount user = userAccountMapper.selectById(userId);
+        if (user == null && DEMO_USER_ID.equals(userId)) {
+            user = createDemoUser();
         }
-        return userAccountRepository.findById(userId)
-            .orElseThrow(() -> new SecurityException("用户不存在或未登录"));
+        if (user == null) {
+            throw new SecurityException("用户不存在或未登录");
+        }
+        return user;
     }
 
     private UserAccount createDemoUserIfMatched(String phone, LoginRequest request) {
@@ -449,6 +454,10 @@ public class CommercialFacadeService {
     }
 
     private UserAccount createDemoUser() {
+        UserAccount existing = userAccountMapper.selectById(DEMO_USER_ID);
+        if (existing != null) {
+            return existing;
+        }
         UserAccount user = new UserAccount();
         user.setId(DEMO_USER_ID);
         user.setPhone("13800138000");
@@ -456,7 +465,9 @@ public class CommercialFacadeService {
         user.setNickname("商用演示用户");
         user.setStatus("ACTIVE");
         user.setRole(resolveRole(user.getPhone()));
-        return userAccountRepository.save(user);
+        prepareUserForInsert(user);
+        userAccountMapper.insert(user);
+        return user;
     }
 
     private String resolveRole(String phone) {
@@ -486,9 +497,22 @@ public class CommercialFacadeService {
     }
 
     private CommercialPlan resolvePlan(String planIdOrCode) {
-        return commercialPlanRepository.findById(planIdOrCode)
-            .or(() -> commercialPlanRepository.findByCode(planIdOrCode))
-            .orElseThrow(() -> new IllegalArgumentException("套餐不存在"));
+        CommercialPlan plan = commercialPlanMapper.selectById(planIdOrCode);
+        if (plan == null) {
+            plan = commercialPlanMapper.selectByCode(planIdOrCode);
+        }
+        if (plan == null) {
+            throw new IllegalArgumentException("套餐不存在");
+        }
+        return plan;
+    }
+
+    private CommercialOrder requireOrder(String orderId) {
+        CommercialOrder order = commercialOrderMapper.selectById(orderId);
+        if (order == null) {
+            throw new IllegalArgumentException("订单不存在");
+        }
+        return order;
     }
 
     private String normalizePaymentChannel(String paymentChannel) {
@@ -559,14 +583,12 @@ public class CommercialFacadeService {
 
     private String resolveTransactionSourceName(BalanceTransaction transaction) {
         if ("ORDER".equals(transaction.getSourceType())) {
-            return commercialOrderRepository.findById(transaction.getSourceId())
-                .map(order -> order.getPlanName() + "套餐")
-                .orElse("套餐订单");
+            CommercialOrder order = commercialOrderMapper.selectById(transaction.getSourceId());
+            return order == null ? "套餐订单" : order.getPlanName() + "套餐";
         }
         if ("SESSION".equals(transaction.getSourceType())) {
-            return usageSessionRepository.findById(transaction.getSourceId())
-                .map(session -> sceneText(session.getScenario()))
-                .orElse("面试使用");
+            UsageSession session = usageSessionMapper.selectById(transaction.getSourceId());
+            return session == null ? "面试使用" : sceneText(session.getScenario());
         }
         return null;
     }
@@ -594,6 +616,22 @@ public class CommercialFacadeService {
             new PlanResponse("boost-300", "求职冲刺包", 400, 30, new BigDecimal("99.00"), "适合面试密集阶段，主推套餐", true),
             new PlanResponse("pro-800", "长期准备包", 1000, 90, new BigDecimal("199.00"), "适合长期备战与多轮模拟", false)
         );
+    }
+
+    private void prepareUserForInsert(UserAccount user) {
+        user.prePersist();
+    }
+
+    private void prepareOrderForInsert(CommercialOrder order) {
+        order.prePersist();
+    }
+
+    private void prepareBalanceTransactionForInsert(BalanceTransaction transaction) {
+        transaction.prePersist();
+    }
+
+    private void prepareUsageSessionForInsert(UsageSession session) {
+        session.prePersist();
     }
 
     private String format(OffsetDateTime time) {

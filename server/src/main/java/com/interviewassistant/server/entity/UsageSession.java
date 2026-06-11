@@ -1,47 +1,31 @@
 package com.interviewassistant.server.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.Table;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-@Entity
-@Table(name = "usage_sessions")
 public class UsageSession {
-    @Id
-    private String id;
+        private String id;
 
-    @Column(nullable = false)
-    private String userId;
+        private String userId;
 
-    @Column(nullable = false, length = 64)
-    private String scenario;
+        private String scenario;
 
-    @Column(nullable = false, length = 20)
-    private String status;
+        private String status;
 
-    @Column(nullable = false)
-    private OffsetDateTime startedAt;
+        private OffsetDateTime startedAt;
 
     private OffsetDateTime endedAt;
 
     private OffsetDateTime lastHeartbeatAt;
 
-    @Column(nullable = false)
-    private Integer durationSeconds;
+        private Integer durationSeconds;
 
-    @Column(nullable = false)
-    private Integer chargedMinutes;
+        private Integer chargedMinutes;
 
-    @Column(nullable = false)
-    private Integer chargedSeconds;
+        private Integer chargedSeconds;
 
-    @PrePersist
-    public void prePersist() {
+        public void prePersist() {
         if (id == null || id.isBlank()) {
             id = "SES-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }

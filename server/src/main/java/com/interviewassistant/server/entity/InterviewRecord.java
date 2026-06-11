@@ -1,39 +1,23 @@
 package com.interviewassistant.server.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.Table;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-@Entity
-@Table(name = "interview_records")
 public class InterviewRecord {
-    @Id
-    private String id;
+        private String id;
 
-    @Column(nullable = false)
-    private String userId;
+        private String userId;
 
     private String usageSessionId;
 
-    @Lob
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String question;
+            private String question;
 
-    @Lob
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String answer;
+            private String answer;
 
-    @Column(nullable = false)
-    private OffsetDateTime createdAt;
+        private OffsetDateTime createdAt;
 
-    @PrePersist
-    public void prePersist() {
+        public void prePersist() {
         if (id == null || id.isBlank()) {
             id = "IR-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }

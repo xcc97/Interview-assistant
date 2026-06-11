@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.interviewassistant.server.dto.PaymentCallbackLogResponse;
 import com.interviewassistant.server.dto.PaymentNotifyResult;
 import com.interviewassistant.server.entity.PaymentCallbackLog;
-import com.interviewassistant.server.repository.PaymentCallbackLogRepository;
+import com.interviewassistant.server.mapper.PaymentCallbackLogMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,12 +17,12 @@ import java.util.Map;
 public class PaymentCallbackLogService {
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
-    private final PaymentCallbackLogRepository paymentCallbackLogRepository;
+    private final PaymentCallbackLogMapper paymentCallbackLogMapper;
     private final ObjectMapper objectMapper;
 
-    public PaymentCallbackLogService(PaymentCallbackLogRepository paymentCallbackLogRepository,
+    public PaymentCallbackLogService(PaymentCallbackLogMapper paymentCallbackLogMapper,
                                      ObjectMapper objectMapper) {
-        this.paymentCallbackLogRepository = paymentCallbackLogRepository;
+        this.paymentCallbackLogMapper = paymentCallbackLogMapper;
         this.objectMapper = objectMapper;
     }
 
@@ -34,7 +34,8 @@ public class PaymentCallbackLogService {
             log.setOrderId(result.getOrderId());
             log.setTransactionId(result.getTransactionId());
         }
-        paymentCallbackLogRepository.save(log);
+        log.prePersist();
+        paymentCallbackLogMapper.insert(log);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -42,7 +43,8 @@ public class PaymentCallbackLogService {
         PaymentCallbackLog log = baseLog(paymentChannel, requestBody, headers);
         log.setStatus("FAILED");
         log.setErrorMessage(truncate(exception.getMessage(), 500));
-        paymentCallbackLogRepository.save(log);
+        log.prePersist();
+        paymentCallbackLogMapper.insert(log);
     }
 
     @Transactional(readOnly = true)
@@ -51,11 +53,11 @@ public class PaymentCallbackLogService {
         String normalizedStatus = status == null ? "" : status.trim().toUpperCase();
         List<PaymentCallbackLog> logs;
         if (!normalizedOrderId.isBlank()) {
-            logs = paymentCallbackLogRepository.findTop100ByOrderIdOrderByCreatedAtDesc(normalizedOrderId);
+            logs = paymentCallbackLogMapper.selectTop100ByOrderIdOrderByCreatedAtDesc(normalizedOrderId);
         } else if (!normalizedStatus.isBlank()) {
-            logs = paymentCallbackLogRepository.findTop100ByStatusOrderByCreatedAtDesc(normalizedStatus);
+            logs = paymentCallbackLogMapper.selectTop100ByStatusOrderByCreatedAtDesc(normalizedStatus);
         } else {
-            logs = paymentCallbackLogRepository.findTop100ByOrderByCreatedAtDesc();
+            logs = paymentCallbackLogMapper.selectTop100OrderByCreatedAtDesc();
         }
         return logs.stream().map(this::toResponse).toList();
     }

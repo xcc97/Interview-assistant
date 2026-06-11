@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.interviewassistant.server.mapper.CommercialOrderMapper">
+    <resultMap id="CommercialOrderResultMap" type="com.interviewassistant.server.entity.CommercialOrder">
+        <id column="id" property="id" />
+        <result column="user_id" property="userId" />
+        <result column="plan_id" property="planId" />
+        <result column="plan_name" property="planName" />
+        <result column="amount" property="amount" />
+        <result column="minutes" property="minutes" />
+        <result column="status" property="status" />
+        <result column="payment_channel" property="paymentChannel" />
+        <result column="payment_transaction_id" property="paymentTransactionId" />
+        <result column="paid_at" property="paidAt" />
+        <result column="closed_at" property="closedAt" />
+        <result column="close_reason" property="closeReason" />
+        <result column="created_at" property="createdAt" />
+    </resultMap>
+
+    <sql id="OrderColumns">
+        id, user_id, plan_id, plan_name, amount, minutes, status, payment_channel, payment_transaction_id, paid_at, closed_at, close_reason, created_at
+    </sql>
+
+    <select id="selectById" resultMap="CommercialOrderResultMap">
+        SELECT <include refid="OrderColumns" />
+        FROM orders
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByUserIdOrderByCreatedAtDesc" resultMap="CommercialOrderResultMap">
+        SELECT <include refid="OrderColumns" />
+        FROM orders
+        WHERE user_id = #{userId}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="selectByStatusAndCreatedAtBefore" resultMap="CommercialOrderResultMap">
+        SELECT <include refid="OrderColumns" />
+        FROM orders
+        WHERE status = #{status}
+          AND created_at &lt; #{createdBefore}
+        ORDER BY created_at ASC
+    </select>
+
+    <select id="selectTop100OrderByCreatedAtDesc" resultMap="CommercialOrderResultMap">
+        SELECT <include refid="OrderColumns" />
+        FROM orders
+        ORDER BY created_at DESC
+        LIMIT 100
+    </select>
+
+    <select id="selectTop100ByStatusOrderByCreatedAtDesc" resultMap="CommercialOrderResultMap">
+        SELECT <include refid="OrderColumns" />
+        FROM orders
+        WHERE status = #{status}
+        ORDER BY created_at DESC
+        LIMIT 100
+    </select>
+
+    <select id="existsByPaymentChannelAndPaymentTransactionIdAndIdNot" resultType="boolean">
+        SELECT COUNT(1) &gt; 0
+        FROM orders
+        WHERE payment_channel = #{paymentChannel}
+          AND payment_transaction_id = #{paymentTransactionId}
+          AND id != #{excludedOrderId}
+    </select>
+
+    <insert id="insert" parameterType="com.interviewassistant.server.entity.CommercialOrder">
+        INSERT INTO orders (
+            id, user_id, plan_id, plan_name, amount, minutes, status, payment_channel, payment_transaction_id, paid_at, closed_at, close_reason, created_at
+        ) VALUES (
+            #{id}, #{userId}, #{planId}, #{planName}, #{amount}, #{minutes}, #{status}, #{paymentChannel}, #{paymentTransactionId}, #{paidAt}, #{closedAt}, #{closeReason}, #{createdAt}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.interviewassistant.server.entity.CommercialOrder">
+        UPDATE orders
+        SET user_id = #{userId},
+            plan_id = #{planId},
+            plan_name = #{planName},
+            amount = #{amount},
+            minutes = #{minutes},
+            status = #{status},
+            payment_channel = #{paymentChannel},
+            payment_transaction_id = #{paymentTransactionId},
+            paid_at = #{paidAt},
+            closed_at = #{closedAt},
+            close_reason = #{closeReason},
+            created_at = #{createdAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateBatch">
+        <foreach collection="orders" item="order" separator=";">
+            UPDATE orders
+            SET status = #{order.status},
+                closed_at = #{order.closedAt},
+                close_reason = #{order.closeReason}
+            WHERE id = #{order.id}
+        </foreach>
+    </update>
+</mapper>

@@ -46,9 +46,20 @@ function resolveSeconds(data, type) {
 
 function formatDuration(totalSeconds) {
   const safeSeconds = Math.max(0, Number(totalSeconds) || 0);
-  const minutes = Math.floor(safeSeconds / 60);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
   const seconds = safeSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  if (hours > 0) {
+    return `${hours}小时${minutes}分${seconds}秒`;
+  }
+  if (minutes > 0) {
+    return `${minutes}分${seconds}秒`;
+  }
+  return `${seconds}秒`;
+}
+
+function formatMinutesAsDuration(minutes) {
+  return formatDuration((Number(minutes) || 0) * 60);
 }
 
 function signedDuration(seconds) {
@@ -210,7 +221,7 @@ onMounted(loadDashboard);
           <div v-for="order in orders" :key="order.id || order.orderId" class="mini-list-item">
             <div>
               <strong>{{ order.planName || '套餐订单' }}</strong>
-              <p>¥{{ order.amount }} · {{ order.grantedMinutes || order.minutes }} 分钟</p>
+              <p>¥{{ order.amount }} · {{ formatMinutesAsDuration(order.grantedMinutes || order.minutes) }}</p>
             </div>
             <span :class="['status-badge', order.status === 'PAID' ? 'success' : 'warning']">{{ statusText(order.status) }}</span>
           </div>

@@ -4,7 +4,7 @@ import com.interviewassistant.server.dto.InterviewRecordRequest;
 import com.interviewassistant.server.dto.InterviewRecordResponse;
 import com.interviewassistant.server.dto.InterviewSessionSummaryResponse;
 import com.interviewassistant.server.entity.InterviewRecord;
-import com.interviewassistant.server.repository.InterviewRecordRepository;
+import com.interviewassistant.server.mapper.InterviewRecordMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,10 +19,10 @@ import java.util.Map;
 public class InterviewRecordService {
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
-    private final InterviewRecordRepository interviewRecordRepository;
+    private final InterviewRecordMapper interviewRecordMapper;
 
-    public InterviewRecordService(InterviewRecordRepository interviewRecordRepository) {
-        this.interviewRecordRepository = interviewRecordRepository;
+    public InterviewRecordService(InterviewRecordMapper interviewRecordMapper) {
+        this.interviewRecordMapper = interviewRecordMapper;
     }
 
     @Transactional
@@ -32,13 +32,15 @@ public class InterviewRecordService {
         record.setUsageSessionId(trimToNull(request.getUsageSessionId()));
         record.setQuestion(limitText(request.getQuestion(), 8000));
         record.setAnswer(limitText(request.getAnswer(), 12000));
-        return toResponse(interviewRecordRepository.save(record));
+        record.prePersist();
+        interviewRecordMapper.insert(record);
+        return toResponse(record);
     }
 
     @Transactional(readOnly = true)
     public List<InterviewSessionSummaryResponse> listSessionSummaries(String userId) {
         Map<String, SessionGroup> groups = new LinkedHashMap<>();
-        for (InterviewRecord record : interviewRecordRepository.findTop200ByUserIdOrderByCreatedAtDesc(userId)) {
+        for (InterviewRecord record : interviewRecordMapper.selectTop200ByUserIdOrderByCreatedAtDesc(userId)) {
             String sessionId = resolveSessionId(record);
             groups.computeIfAbsent(sessionId, ignored -> new SessionGroup(sessionId)).add(record);
         }
@@ -54,7 +56,7 @@ public class InterviewRecordService {
         if (sessionId == null || sessionId.trim().isEmpty()) {
             return List.of();
         }
-        return interviewRecordRepository.findByUserIdAndUsageSessionIdOrderByCreatedAtAsc(userId, sessionId.trim()).stream()
+        return interviewRecordMapper.selectByUserIdAndUsageSessionIdOrderByCreatedAtAsc(userId, sessionId.trim()).stream()
             .map(this::toResponse)
             .toList();
     }
@@ -64,7 +66,7 @@ public class InterviewRecordService {
         if (sessionId == null || sessionId.trim().isEmpty()) {
             throw new IllegalArgumentException("面试场次不能为空");
         }
-        long deleted = interviewRecordRepository.deleteByUserIdAndUsageSessionId(userId, sessionId.trim());
+        int deleted = interviewRecordMapper.deleteByUserIdAndUsageSessionId(userId, sessionId.trim());
         if (deleted == 0) {
             throw new IllegalArgumentException("面试记录不存在或已删除");
         }

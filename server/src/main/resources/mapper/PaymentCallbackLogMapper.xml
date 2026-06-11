@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.interviewassistant.server.mapper.PaymentCallbackLogMapper">
+    <resultMap id="PaymentCallbackLogResultMap" type="com.interviewassistant.server.entity.PaymentCallbackLog">
+        <id column="id" property="id" />
+        <result column="payment_channel" property="paymentChannel" />
+        <result column="order_id" property="orderId" />
+        <result column="transaction_id" property="transactionId" />
+        <result column="status" property="status" />
+        <result column="error_message" property="errorMessage" />
+        <result column="request_body" property="requestBody" />
+        <result column="request_headers" property="requestHeaders" />
+        <result column="created_at" property="createdAt" />
+    </resultMap>
+
+    <sql id="CallbackLogColumns">
+        id, payment_channel, order_id, transaction_id, status, error_message, request_body, request_headers, created_at
+    </sql>
+
+    <select id="selectTop100OrderByCreatedAtDesc" resultMap="PaymentCallbackLogResultMap">
+        SELECT <include refid="CallbackLogColumns" />
+        FROM payment_callback_logs
+        ORDER BY created_at DESC
+        LIMIT 100
+    </select>
+
+    <select id="selectTop100ByOrderIdOrderByCreatedAtDesc" resultMap="PaymentCallbackLogResultMap">
+        SELECT <include refid="CallbackLogColumns" />
+        FROM payment_callback_logs
+        WHERE order_id = #{orderId}
+        ORDER BY created_at DESC
+        LIMIT 100
+    </select>
+
+    <select id="selectTop100ByStatusOrderByCreatedAtDesc" resultMap="PaymentCallbackLogResultMap">
+        SELECT <include refid="CallbackLogColumns" />
+        FROM payment_callback_logs
+        WHERE status = #{status}
+        ORDER BY created_at DESC
+        LIMIT 100
+    </select>
+
+    <insert id="insert" parameterType="com.interviewassistant.server.entity.PaymentCallbackLog">
+        INSERT INTO payment_callback_logs (
+            id, payment_channel, order_id, transaction_id, status, error_message, request_body, request_headers, created_at
+        ) VALUES (
+            #{id}, #{paymentChannel}, #{orderId}, #{transactionId}, #{status}, #{errorMessage}, #{requestBody}, #{requestHeaders}, #{createdAt}
+        )
+    </insert>
+</mapper>

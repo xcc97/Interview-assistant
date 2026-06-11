@@ -1,40 +1,25 @@
 package com.interviewassistant.server.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.Table;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-@Entity
-@Table(name = "users")
 public class UserAccount {
-    @Id
-    private String id;
+        private String id;
 
-    @Column(nullable = false, unique = true, length = 32)
-    private String phone;
+        private String phone;
 
-    @Column(nullable = false)
-    private String passwordHash;
+        private String passwordHash;
 
-    @Column(nullable = false, length = 64)
-    private String nickname;
+        private String nickname;
 
-    @Column(nullable = false, length = 20)
-    private String status;
+        private String status;
 
-    @Column(nullable = false, length = 20)
-    private String role;
+        private String role;
 
-    @Column(nullable = false)
-    private OffsetDateTime createdAt;
+        private OffsetDateTime createdAt;
 
-    @PrePersist
-    public void prePersist() {
+        public void prePersist() {
         if (id == null || id.isBlank()) {
             id = "user-" + UUID.randomUUID();
         }

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.interviewassistant.server.mapper.UsageSessionMapper">
+    <resultMap id="UsageSessionResultMap" type="com.interviewassistant.server.entity.UsageSession">
+        <id column="id" property="id" />
+        <result column="user_id" property="userId" />
+        <result column="scenario" property="scenario" />
+        <result column="status" property="status" />
+        <result column="started_at" property="startedAt" />
+        <result column="ended_at" property="endedAt" />
+        <result column="last_heartbeat_at" property="lastHeartbeatAt" />
+        <result column="duration_seconds" property="durationSeconds" />
+        <result column="charged_minutes" property="chargedMinutes" />
+        <result column="charged_seconds" property="chargedSeconds" />
+    </resultMap>
+
+    <sql id="UsageSessionColumns">
+        id, user_id, scenario, status, started_at, ended_at, last_heartbeat_at, duration_seconds, charged_minutes, charged_seconds
+    </sql>
+
+    <select id="selectById" resultMap="UsageSessionResultMap">
+        SELECT <include refid="UsageSessionColumns" />
+        FROM usage_sessions
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByUserIdOrderByStartedAtDesc" resultMap="UsageSessionResultMap">
+        SELECT <include refid="UsageSessionColumns" />
+        FROM usage_sessions
+        WHERE user_id = #{userId}
+        ORDER BY started_at DESC
+    </select>
+
+    <insert id="insert" parameterType="com.interviewassistant.server.entity.UsageSession">
+        INSERT INTO usage_sessions (
+            id, user_id, scenario, status, started_at, ended_at, last_heartbeat_at, duration_seconds, charged_minutes, charged_seconds
+        ) VALUES (
+            #{id}, #{userId}, #{scenario}, #{status}, #{startedAt}, #{endedAt}, #{lastHeartbeatAt}, #{durationSeconds}, #{chargedMinutes}, #{chargedSeconds}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.interviewassistant.server.entity.UsageSession">
+        UPDATE usage_sessions
+        SET user_id = #{userId},
+            scenario = #{scenario},
+            status = #{status},
+            started_at = #{startedAt},
+            ended_at = #{endedAt},
+            last_heartbeat_at = #{lastHeartbeatAt},
+            duration_seconds = #{durationSeconds},
+            charged_minutes = #{chargedMinutes},
+            charged_seconds = #{chargedSeconds}
+        WHERE id = #{id}
+    </update>
+</mapper>

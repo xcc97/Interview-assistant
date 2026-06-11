@@ -8,15 +8,23 @@ const errorText = ref('');
 
 const settlementRules = [
   '每次实时辅助或模拟练习都会生成一条使用记录。',
-  '系统会按实际使用时长结算，并同步更新你的剩余分钟数。',
+  '系统会按实际使用时长结算，并同步更新你的剩余可用时长。',
   '你可以通过使用记录了解自己的练习频率和时间投入。',
 ];
 
 function formatDuration(seconds) {
   if (!seconds && seconds !== 0) return '-';
-  const minutes = Math.floor(seconds / 60);
-  const restSeconds = seconds % 60;
-  return `${minutes} 分 ${restSeconds} 秒`;
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const restSeconds = safeSeconds % 60;
+  if (hours > 0) {
+    return `${hours}小时${minutes}分${restSeconds}秒`;
+  }
+  if (minutes > 0) {
+    return `${minutes}分${restSeconds}秒`;
+  }
+  return `${restSeconds}秒`;
 }
 
 function sceneText(scene) {
@@ -74,7 +82,7 @@ onMounted(loadUsage);
               <th>开始时间</th>
               <th>结束时间</th>
               <th>实际时长</th>
-              <th>扣费分钟</th>
+              <th>扣费时长</th>
               <th>状态</th>
             </tr>
           </thead>
@@ -84,7 +92,7 @@ onMounted(loadUsage);
               <td>{{ formatDateTime(record.startedAt) }}</td>
               <td>{{ formatDateTime(record.endedAt) }}</td>
               <td>{{ formatDuration(record.durationSeconds) }}</td>
-              <td>{{ record.chargedMinutes }} 分钟</td>
+              <td>{{ formatDuration(record.chargedSeconds ?? ((record.chargedMinutes || 0) * 60)) }}</td>
               <td><span :class="['status-badge', record.status === 'SETTLED' ? 'success' : 'warning']">{{ statusText(record.status) }}</span></td>
             </tr>
           </tbody>

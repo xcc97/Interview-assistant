@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.interviewassistant.server.mapper.InterviewRecordMapper">
+    <resultMap id="InterviewRecordResultMap" type="com.interviewassistant.server.entity.InterviewRecord">
+        <id column="id" property="id" />
+        <result column="user_id" property="userId" />
+        <result column="usage_session_id" property="usageSessionId" />
+        <result column="question" property="question" />
+        <result column="answer" property="answer" />
+        <result column="created_at" property="createdAt" />
+    </resultMap>
+
+    <sql id="InterviewRecordColumns">
+        id, user_id, usage_session_id, question, answer, created_at
+    </sql>
+
+    <select id="selectTop200ByUserIdOrderByCreatedAtDesc" resultMap="InterviewRecordResultMap">
+        SELECT <include refid="InterviewRecordColumns" />
+        FROM interview_records
+        WHERE user_id = #{userId}
+        ORDER BY created_at DESC
+        LIMIT 200
+    </select>
+
+    <select id="selectByUserIdAndUsageSessionIdOrderByCreatedAtAsc" resultMap="InterviewRecordResultMap">
+        SELECT <include refid="InterviewRecordColumns" />
+        FROM interview_records
+        WHERE user_id = #{userId}
+          AND usage_session_id = #{usageSessionId}
+        ORDER BY created_at ASC
+    </select>
+
+    <delete id="deleteByUserIdAndUsageSessionId">
+        DELETE FROM interview_records
+        WHERE user_id = #{userId}
+          AND usage_session_id = #{usageSessionId}
+    </delete>
+
+    <insert id="insert" parameterType="com.interviewassistant.server.entity.InterviewRecord">
+        INSERT INTO interview_records (id, user_id, usage_session_id, question, answer, created_at)
+        VALUES (#{id}, #{userId}, #{usageSessionId}, #{question}, #{answer}, #{createdAt})
+    </insert>
+</mapper>

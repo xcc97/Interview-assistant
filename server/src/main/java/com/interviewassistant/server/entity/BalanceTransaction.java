@@ -1,51 +1,18 @@
 package com.interviewassistant.server.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Index;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
-
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-@Entity
-@Table(name = "balance_transactions",
-    indexes = {
-        @Index(name = "idx_balance_user_created", columnList = "userId, createdAt"),
-        @Index(name = "idx_balance_source", columnList = "sourceType, sourceId, type")
-    },
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uk_balance_source_type", columnNames = {"sourceType", "sourceId", "type"})
-    })
 public class BalanceTransaction {
-    @Id
     private String id;
-
-    @Column(nullable = false)
     private String userId;
-
-    @Column(nullable = false, length = 20)
     private String type;
-
-    @Column(nullable = false)
     private Integer minutes;
-
-    @Column(nullable = false)
     private Integer seconds;
-
-    @Column(nullable = false, length = 32)
     private String sourceType;
-
-    @Column(nullable = false)
     private String sourceId;
-
-    @Column(nullable = false)
     private OffsetDateTime createdAt;
 
-    @PrePersist
     public void prePersist() {
         if (id == null || id.isBlank()) {
             id = "BAL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
