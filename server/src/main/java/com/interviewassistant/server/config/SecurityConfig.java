@@ -39,6 +39,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/register", "/api/auth/login", "/api/client/health").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/plans").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/payment/wechat/notify", "/api/payment/alipay/notify").permitAll()
                 .requestMatchers("/api/auth/me", "/api/user/**", "/api/orders/**", "/api/payment/**", "/api/usage/**", "/api/balance/**", "/api/admin/**", "/api/client/asr/token", "/api/client/interview/analyze").authenticated()
                 .anyRequest().permitAll()
             )

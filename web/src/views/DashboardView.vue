@@ -89,6 +89,7 @@ function transactionSourceText(item) {
 function statusText(status) {
   if (status === 'PAID') return '已支付';
   if (status === 'PENDING') return '待支付';
+  if (status === 'CLOSED') return '已取消';
   if (status === 'ACTIVE') return '进行中';
   if (status === 'SETTLED') return '已结算';
   return status || '-';

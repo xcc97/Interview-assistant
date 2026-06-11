@@ -82,6 +82,16 @@ public class CommercialController {
         return commercialFacadeService.listOrders(currentUserService.requireCurrentUserId());
     }
 
+    @PostMapping("/orders/{orderId}/cancel")
+    public OrderResponse cancelOrder(@PathVariable String orderId) {
+        return commercialFacadeService.cancelPendingOrder(currentUserService.requireCurrentUserId(), orderId);
+    }
+
+    @PostMapping("/orders/{orderId}/sync-paid")
+    public OrderResponse syncPaidOrder(@PathVariable String orderId) {
+        return commercialFacadeService.syncOwnedPaidOrder(currentUserService.requireCurrentUserId(), orderId, paymentService);
+    }
+
     @PostMapping("/payment/create")
     public PaymentCreateResponse createPayment(@Valid @RequestBody CreatePaymentRequest request) {
         try {
@@ -92,6 +102,18 @@ public class CommercialController {
             ));
         } catch (Exception exception) {
             throw new IllegalStateException(exception.getMessage() == null ? "创建支付失败" : exception.getMessage(), exception);
+        }
+    }
+
+    @PostMapping("/payment/orders/{orderId}/sync")
+    public OrderResponse syncPaymentOrder(@PathVariable String orderId) {
+        try {
+            PaymentNotifyResult notifyResult = paymentService.queryPaidOrder(
+                commercialFacadeService.resolveOwnedOrder(currentUserService.requireCurrentUserId(), orderId)
+            );
+            return commercialFacadeService.markOrderPaid(notifyResult);
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception.getMessage() == null ? "同步支付状态失败" : exception.getMessage(), exception);
         }
     }
 

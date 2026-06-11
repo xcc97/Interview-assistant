@@ -6,6 +6,8 @@ import com.alipay.api.AlipayConfig;
 import com.alipay.api.DefaultAlipayClient;
 import com.alipay.api.internal.util.AlipaySignature;
 import com.alipay.api.request.AlipayTradePagePayRequest;
+import com.alipay.api.request.AlipayTradeQueryRequest;
+import com.alipay.api.response.AlipayTradeQueryResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.interviewassistant.server.config.AssistantProperties;
@@ -69,6 +71,17 @@ public class PaymentServiceImpl implements PaymentService {
             return createAlipayPagePayment(order);
         }
         throw new IllegalArgumentException("暂不支持该支付方式");
+    }
+
+    @Override
+    public PaymentNotifyResult queryPaidOrder(CommercialOrder order) throws Exception {
+        if (properties.getPayment().isMockPaymentEnabled()) {
+            return new PaymentNotifyResult(order.getId(), order.getPaymentChannel(), order.getAmount(), "MOCK-" + order.getId());
+        }
+        if ("ALIPAY".equals(order.getPaymentChannel())) {
+            return queryAlipayPaidOrder(order);
+        }
+        throw new IllegalArgumentException("暂不支持主动查询该支付渠道");
     }
 
     @Override
@@ -175,6 +188,29 @@ public class PaymentServiceImpl implements PaymentService {
         } catch (AlipayApiException exception) {
             throw new IllegalStateException("创建支付宝支付失败：" + exception.getErrMsg(), exception);
         }
+    }
+
+    private PaymentNotifyResult queryAlipayPaidOrder(CommercialOrder order) throws Exception {
+        AssistantProperties.Payment.Alipay alipay = properties.getPayment().getAlipay();
+        ensureAlipayEnabled(alipay);
+
+        Map<String, String> bizContent = new HashMap<>();
+        bizContent.put("out_trade_no", order.getId());
+
+        AlipayTradeQueryRequest request = new AlipayTradeQueryRequest();
+        request.setBizContent(objectMapper.writeValueAsString(bizContent));
+
+        AlipayTradeQueryResponse response = buildAlipayClient(alipay).execute(request);
+        if (response == null || !response.isSuccess()) {
+            String subMsg = response == null ? "支付宝未返回查询结果" : response.getSubMsg();
+            throw new IllegalStateException(subMsg == null || subMsg.isBlank() ? "支付宝订单查询失败" : subMsg);
+        }
+        String tradeStatus = response.getTradeStatus();
+        if (!"TRADE_SUCCESS".equals(tradeStatus) && !"TRADE_FINISHED".equals(tradeStatus)) {
+            throw new IllegalStateException("支付宝交易尚未成功：" + tradeStatus);
+        }
+        BigDecimal paidAmount = new BigDecimal(response.getTotalAmount()).setScale(2, RoundingMode.HALF_UP);
+        return new PaymentNotifyResult(order.getId(), "ALIPAY", paidAmount, response.getTradeNo());
     }
 
     private String buildWechatAuthorization(String method, String canonicalUrl, String body, AssistantProperties.Payment.Wechat wechat) throws Exception {

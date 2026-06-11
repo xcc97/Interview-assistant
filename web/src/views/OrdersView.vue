@@ -1,12 +1,14 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { createPayment, getOrders, getRuntimeConfig, mockPaymentPaid } from '../api';
+import { cancelOrder, createPayment, getOrders, getRuntimeConfig, mockPaymentPaid, syncPaidOrder } from '../api';
 
 const router = useRouter();
 const orders = ref([]);
 const loading = ref(false);
 const payingOrderId = ref('');
+const cancelingOrderId = ref('');
+const syncingOrderId = ref('');
 const creatingPaymentOrderId = ref('');
 const paymentResult = ref(null);
 const paymentPollingText = ref('');
@@ -24,6 +26,7 @@ const orderRules = [
 function statusText(status) {
   if (status === 'PAID') return '已支付';
   if (status === 'PENDING') return '待支付';
+  if (status === 'CLOSED') return '已取消';
   return status;
 }
 
@@ -31,6 +34,22 @@ function paymentChannelText(channel) {
   if (channel === 'WECHAT') return '微信支付';
   if (channel === 'ALIPAY') return '支付宝';
   return channel || '-';
+}
+
+function orderIdText(order) {
+  const orderId = String(order.id || order.orderId || '');
+  if (!orderId) return '订单号：-';
+  return `订单尾号：${orderId.slice(-8)}`;
+}
+
+function formatMinutesAsDuration(minutes) {
+  const totalSeconds = Math.max(0, (Number(minutes) || 0) * 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const restMinutes = Math.floor((totalSeconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}小时${restMinutes}分`;
+  }
+  return `${restMinutes}分钟`;
 }
 
 function formatDateTime(value) {
@@ -59,6 +78,9 @@ async function loadOrders(showSuccess = false) {
   loading.value = true;
   errorText.value = '';
   try {
+    if (showSuccess && paymentResult.value?.orderId) {
+      await trySyncPaidOrder(paymentResult.value.orderId, false);
+    }
     orders.value = await getOrders();
     if (showSuccess) {
       successText.value = '订单状态已刷新。';
@@ -75,12 +97,50 @@ async function loadOrders(showSuccess = false) {
   }
 }
 
+async function trySyncPaidOrder(orderId, showMessage = true) {
+  if (!orderId) {
+    return null;
+  }
+  syncingOrderId.value = orderId;
+  if (showMessage) {
+    errorText.value = '';
+    successText.value = '';
+  }
+  try {
+    const syncedOrder = await syncPaidOrder(orderId);
+    if (syncedOrder?.status === 'PAID') {
+      clearPaymentPolling();
+      if (paymentResult.value?.orderId === orderId) {
+        paymentResult.value = null;
+      }
+      successText.value = '支付已确认，套餐时长已到账。';
+    } else if (showMessage) {
+      successText.value = '已同步支付状态，请查看订单最新状态。';
+    }
+    return syncedOrder;
+  } catch (error) {
+    if (showMessage) {
+      errorText.value = error.message;
+    }
+    return null;
+  } finally {
+    syncingOrderId.value = '';
+  }
+}
+
+async function handleSyncPaidOrder(order) {
+  const orderId = order.id || order.orderId;
+  await trySyncPaidOrder(orderId, true);
+  await loadOrders(false);
+}
+
 function startPaymentPolling(orderId) {
   clearPaymentPolling();
   let remainingSeconds = 120;
   paymentPollingText.value = '正在等待支付结果确认...';
   paymentPollingTimer = setInterval(async () => {
     remainingSeconds -= 5;
+    await trySyncPaidOrder(orderId, false);
     await loadOrders(false);
     const paid = orders.value.some((order) => (order.id || order.orderId) === orderId && order.status === 'PAID');
     if (paid) {
@@ -110,6 +170,25 @@ async function handleMockPay(orderId) {
     errorText.value = error.message;
   } finally {
     payingOrderId.value = '';
+  }
+}
+
+async function handleCancelOrder(order) {
+  const orderId = order.id || order.orderId;
+  if (!window.confirm(`确认取消${orderIdText(order)}吗？取消后这笔待支付订单将关闭。`)) {
+    return;
+  }
+  cancelingOrderId.value = orderId;
+  errorText.value = '';
+  successText.value = '';
+  try {
+    await cancelOrder(orderId);
+    successText.value = `${orderIdText(order)} 已取消。`;
+    await loadOrders();
+  } catch (error) {
+    errorText.value = error.message;
+  } finally {
+    cancelingOrderId.value = '';
   }
 }
 
@@ -195,9 +274,9 @@ onBeforeUnmount(clearPaymentPolling);
         <table class="data-table">
           <thead>
             <tr>
-              <th>套餐</th>
+              <th>订单</th>
               <th>金额</th>
-              <th>分钟数</th>
+              <th>时长</th>
               <th>状态</th>
               <th>支付方式</th>
               <th>支付时间</th>
@@ -206,10 +285,13 @@ onBeforeUnmount(clearPaymentPolling);
           </thead>
           <tbody>
             <tr v-for="order in orders" :key="order.id || order.orderId">
-              <td>{{ order.planName }}</td>
+              <td>
+                <strong>{{ order.planName }}</strong>
+                <p class="compact-note">{{ orderIdText(order) }}</p>
+              </td>
               <td>¥{{ order.amount }}</td>
-              <td>{{ order.grantedMinutes || order.minutes }} 分钟</td>
-              <td><span :class="['status-badge', order.status === 'PAID' ? 'success' : 'warning']">{{ statusText(order.status) }}</span></td>
+              <td>{{ formatMinutesAsDuration(order.grantedMinutes || order.minutes) }}</td>
+              <td><span :class="['status-badge', order.status === 'PAID' ? 'success' : order.status === 'CLOSED' ? 'muted' : 'warning']">{{ statusText(order.status) }}</span></td>
               <td>{{ paymentChannelText(order.paymentChannel) }}</td>
               <td>{{ formatDateTime(order.paidAt) }}</td>
               <td>
@@ -235,6 +317,21 @@ onBeforeUnmount(clearPaymentPolling);
                     @click="handleMockPay(order.id || order.orderId)"
                   >
                     {{ payingOrderId === (order.id || order.orderId) ? '处理中...' : '完成支付' }}
+                  </button>
+                  <button
+                    v-if="order.paymentChannel === 'ALIPAY'"
+                    class="secondary-btn small-btn"
+                    :disabled="syncingOrderId === (order.id || order.orderId)"
+                    @click="handleSyncPaidOrder(order)"
+                  >
+                    {{ syncingOrderId === (order.id || order.orderId) ? '同步中...' : '同步支付状态' }}
+                  </button>
+                  <button
+                    class="secondary-btn small-btn"
+                    :disabled="cancelingOrderId === (order.id || order.orderId)"
+                    @click="handleCancelOrder(order)"
+                  >
+                    {{ cancelingOrderId === (order.id || order.orderId) ? '取消中...' : '取消订单' }}
                   </button>
                   <button class="secondary-btn small-btn" @click="contactSupport(order.id || order.orderId)">
                     联系客服

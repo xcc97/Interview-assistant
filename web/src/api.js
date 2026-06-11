@@ -102,6 +102,18 @@ export async function getOrders() {
   });
 }
 
+export async function cancelOrder(orderId) {
+  return request(`/api/orders/${encodeURIComponent(orderId)}/cancel`, {
+    method: 'POST',
+  });
+}
+
+export async function syncPaidOrder(orderId) {
+  return request(`/api/orders/${encodeURIComponent(orderId)}/sync-paid`, {
+    method: 'POST',
+  });
+}
+
 export async function createPayment(payload) {
   return request('/api/payment/create', {
     method: 'POST',

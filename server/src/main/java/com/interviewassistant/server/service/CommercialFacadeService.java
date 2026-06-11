@@ -182,6 +182,55 @@ public class CommercialFacadeService {
             .toList();
     }
 
+    @Transactional
+    public OrderResponse cancelPendingOrder(String userId, String orderId) {
+        UserAccount user = resolveUser(userId);
+        CommercialOrder order = requireOrder(orderId);
+        if (!user.getId().equals(order.getUserId())) {
+            throw new SecurityException("无权操作该订单");
+        }
+        if ("PAID".equals(order.getStatus())) {
+            throw new IllegalStateException("已支付订单不可取消");
+        }
+        if ("CLOSED".equals(order.getStatus())) {
+            return toOrderResponse(order);
+        }
+        if (!"PENDING".equals(order.getStatus())) {
+            throw new IllegalStateException("订单状态不可取消");
+        }
+        order.setStatus("CLOSED");
+        order.setClosedAt(OffsetDateTime.now());
+        order.setCloseReason("用户主动取消");
+        commercialOrderMapper.update(order);
+        return toOrderResponse(order);
+    }
+
+    @Transactional
+    public OrderResponse syncOwnedPaidOrder(String userId, String orderId, PaymentService paymentService) {
+        UserAccount user = resolveUser(userId);
+        CommercialOrder order = requireOrder(orderId);
+        if (!user.getId().equals(order.getUserId())) {
+            throw new SecurityException("无权操作该订单");
+        }
+        if ("PAID".equals(order.getStatus())) {
+            ensureGrantTransactionExists(order);
+            return toOrderResponse(order);
+        }
+        if (!"PENDING".equals(order.getStatus())) {
+            throw new IllegalStateException("订单状态不可同步");
+        }
+        try {
+            PaymentNotifyResult notifyResult = paymentService.queryPaidOrder(order);
+            ensurePaymentNotifyMatchesOrder(order, notifyResult);
+            if (notifyResult.getTransactionId() != null && !notifyResult.getTransactionId().isBlank()) {
+                order.setPaymentTransactionId(notifyResult.getTransactionId().trim());
+            }
+            return markOrderPaid(order);
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception.getMessage() == null ? "支付状态同步失败" : exception.getMessage(), exception);
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<OrderResponse> listRecentAdminOrders(String status) {
         String normalizedStatus = status == null ? "" : status.trim().toUpperCase();
@@ -191,13 +240,19 @@ public class CommercialFacadeService {
         return orders.stream().map(this::toOrderResponse).toList();
     }
 
-    @Transactional
-    public CommercialOrder resolveOwnedPendingOrder(String userId, String orderId, String paymentChannel) {
+    @Transactional(readOnly = true)
+    public CommercialOrder resolveOwnedOrder(String userId, String orderId) {
         UserAccount user = resolveUser(userId);
         CommercialOrder order = requireOrder(orderId);
         if (!user.getId().equals(order.getUserId())) {
             throw new SecurityException("无权操作该订单");
         }
+        return order;
+    }
+
+    @Transactional
+    public CommercialOrder resolveOwnedPendingOrder(String userId, String orderId, String paymentChannel) {
+        CommercialOrder order = resolveOwnedOrder(userId, orderId);
         if (!"PENDING".equals(order.getStatus())) {
             throw new IllegalStateException("订单状态不可支付");
         }
